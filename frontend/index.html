@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Controle de Gastos RR</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ─── Tela de login ──────────────────────────────────────────────────── -->
+  <div id="login-screen" class="login-screen hidden">
+    <div class="login-card">
+      <h1>💰 Controle de Gastos</h1>
+      <p class="login-subtitle">Acompanhe seus gastos e investimentos em família</p>
+      <div id="login-error" class="login-error hidden"></div>
+      <a id="btn-login" href="#" class="btn btn-google">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20" />
+        Entrar com Google
+      </a>
+    </div>
+  </div>
+
+  <!-- ─── App principal ──────────────────────────────────────────────────── -->
+  <div id="app" class="hidden">
+
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="navbar-brand">💰 Controle de Gastos RR</div>
+      <div class="navbar-user">
+        <img id="user-picture" src="" alt="Foto" class="user-avatar" />
+        <span id="user-name"></span>
+        <button id="btn-logout" class="btn btn-outline btn-sm">Sair</button>
+      </div>
+    </header>
+
+    <main class="container">
+
+      <!-- Resumo -->
+      <section class="summary-cards">
+        <div class="card summary-card">
+          <span class="summary-label">Total de Gastos</span>
+          <span class="summary-value expense" id="total-gastos">R$ 0,00</span>
+        </div>
+        <div class="card summary-card">
+          <span class="summary-label">Total de Investimentos</span>
+          <span class="summary-value investment" id="total-investimentos">R$ 0,00</span>
+        </div>
+        <div class="card summary-card">
+          <span class="summary-label">Lançamentos</span>
+          <span class="summary-value" id="total-lancamentos">0</span>
+        </div>
+      </section>
+
+      <!-- Formulário de novo lançamento -->
+      <section class="card form-section">
+        <h2>Novo Lançamento</h2>
+        <form id="form-gasto">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="input-data">Data *</label>
+              <input type="date" id="input-data" required />
+            </div>
+            <div class="form-group">
+              <label for="input-valor">Valor (R$) *</label>
+              <input type="number" id="input-valor" step="0.01" min="0.01" placeholder="0,00" required />
+            </div>
+            <div class="form-group">
+              <label for="input-tipo">Tipo *</label>
+              <select id="input-tipo" required>
+                <option value="">Selecione...</option>
+                <option value="Gasto">Gasto</option>
+                <option value="Investimento">Investimento</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="input-categoria">Categoria *</label>
+              <select id="input-categoria" required>
+                <option value="">Selecione...</option>
+                <optgroup label="Gastos">
+                  <option value="Alimentação">Alimentação</option>
+                  <option value="Transporte">Transporte</option>
+                  <option value="Moradia">Moradia</option>
+                  <option value="Saúde">Saúde</option>
+                  <option value="Educação">Educação</option>
+                  <option value="Lazer">Lazer</option>
+                  <option value="Vestuário">Vestuário</option>
+                  <option value="Assinaturas">Assinaturas</option>
+                  <option value="Outros">Outros</option>
+                </optgroup>
+                <optgroup label="Investimentos">
+                  <option value="Renda Fixa">Renda Fixa</option>
+                  <option value="Renda Variável">Renda Variável</option>
+                  <option value="Poupança">Poupança</option>
+                  <option value="Previdência">Previdência</option>
+                  <option value="Cripto">Cripto</option>
+                  <option value="Imóvel">Imóvel</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="input-responsavel">Responsável *</label>
+              <select id="input-responsavel" required>
+                <option value="">Selecione...</option>
+                <option value="Eu">Eu</option>
+                <option value="Esposa">Esposa</option>
+                <option value="Casal">Casal</option>
+              </select>
+            </div>
+            <div class="form-group form-group-full">
+              <label for="input-descricao">Descrição</label>
+              <input type="text" id="input-descricao" placeholder="Ex: Compras no mercado" maxlength="200" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <div id="form-feedback" class="feedback hidden"></div>
+            <button type="submit" class="btn btn-primary" id="btn-submit">Adicionar</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Tabela de lançamentos -->
+      <section class="card table-section">
+        <div class="table-header">
+          <h2>Lançamentos</h2>
+          <div class="table-filters">
+            <input type="text" id="filter-search" placeholder="Buscar..." class="filter-input" />
+            <select id="filter-tipo" class="filter-input">
+              <option value="">Todos os tipos</option>
+              <option value="Gasto">Gastos</option>
+              <option value="Investimento">Investimentos</option>
+            </select>
+            <select id="filter-responsavel" class="filter-input">
+              <option value="">Todos</option>
+              <option value="Eu">Eu</option>
+              <option value="Esposa">Esposa</option>
+              <option value="Casal">Casal</option>
+            </select>
+            <button id="btn-refresh" class="btn btn-outline btn-sm" title="Atualizar">↻ Atualizar</button>
+          </div>
+        </div>
+
+        <div id="loading" class="loading hidden">Carregando...</div>
+        <div id="empty-state" class="empty-state hidden">Nenhum lançamento encontrado.</div>
+
+        <div class="table-wrapper">
+          <table id="tabela-gastos">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Categoria</th>
+                <th>Descrição</th>
+                <th>Responsável</th>
+                <th class="text-right">Valor</th>
+                <th class="text-center">Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-gastos"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal de confirmação de exclusão -->
+  <div id="modal-confirm" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-box">
+      <h3>Confirmar exclusão</h3>
+      <p>Tem certeza que deseja remover este lançamento?</p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-outline">Cancelar</button>
+        <button id="modal-confirm-btn" class="btn btn-danger">Remover</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

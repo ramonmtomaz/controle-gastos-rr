@@ -1,0 +1,14 @@
+# Dependências Node
+node_modules/
+
+# Variáveis de ambiente (nunca commitar!)
+backend/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.DS_Store
