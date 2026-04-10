@@ -12,3 +12,7 @@ npm-debug.log*
 .vscode/
 .idea/
 *.DS_Store
+
+*.json
+!package.json
+!package-lock.json

@@ -24,7 +24,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(controle);
   } catch (err) {
     console.error('Erro ao criar controle:', err);
-    res.status(500).json({ error: 'Erro ao criar controle' });
+    res.status(500).json({ error: err.message });
   }
 });
 

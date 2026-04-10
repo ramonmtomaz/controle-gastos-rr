@@ -15,7 +15,10 @@ function getServiceSheets() {
     key.client_email,
     null,
     key.private_key,
-    ['https://www.googleapis.com/auth/spreadsheets'],
+    [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive',
+    ],
   );
   _sheets = google.sheets({ version: 'v4', auth });
   return _sheets;
