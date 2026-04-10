@@ -11,8 +11,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
+// O browser envia Origin sem path (ex: https://ramonmtomaz.github.io),
+// por isso extraímos apenas protocolo+host da FRONTEND_URL.
+const frontendOrigin = new URL(process.env.FRONTEND_URL || 'http://localhost:5500').origin;
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5500',
+  origin: frontendOrigin,
   credentials: true,
 }));
 
