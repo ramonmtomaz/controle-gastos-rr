@@ -15,10 +15,7 @@ function getServiceSheets() {
     key.client_email,
     null,
     key.private_key,
-    [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive',
-    ],
+    ['https://www.googleapis.com/auth/spreadsheets'],
   );
   _sheets = google.sheets({ version: 'v4', auth });
   return _sheets;
@@ -129,28 +126,30 @@ async function getControleById(id) {
 }
 
 async function createControle(nome, ownerEmail) {
-  // Cria nova planilha de gastos com conta de serviço
-  const newSheet = await getServiceSheets().spreadsheets.create({
+  const id      = randomUUID();
+  const tabName = `gastos_${id}`;
+
+  // Cria nova aba dentro da planilha mestre (não precisa de Drive API)
+  await getServiceSheets().spreadsheets.batchUpdate({
+    spreadsheetId: MASTER_ID(),
     requestBody: {
-      properties: { title: nome },
-      sheets: [{ properties: { title: 'Gastos' } }],
+      requests: [{ addSheet: { properties: { title: tabName } } }],
     },
   });
-  const spreadsheetId = newSheet.data.spreadsheetId;
 
-  // Adiciona cabeçalho
+  // Adiciona cabeçalho na nova aba
   await getServiceSheets().spreadsheets.values.update({
-    spreadsheetId,
-    range: 'Gastos!A1:H1',
+    spreadsheetId: MASTER_ID(),
+    range: `${tabName}!A1:H1`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [['ID', 'Data', 'Valor', 'Categoria', 'Descrição', 'Responsável', 'Tipo', 'DataRegistro']],
     },
   });
 
-  const id        = randomUUID();
   const createdAt = new Date().toISOString();
-  await appendRow('Controles', [id, nome, ownerEmail, spreadsheetId, createdAt]);
+  // Armazena tabName no campo spreadsheet_id — gastos.js usa como nome da aba
+  await appendRow('Controles', [id, nome, ownerEmail, tabName, createdAt]);
   await appendRow('Membros',   [id, ownerEmail, 'owner', createdAt]);
 
   // Código de convite inicial
@@ -158,7 +157,7 @@ async function createControle(nome, ownerEmail) {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   await appendRow('Codigos', [id, code, expiresAt]);
 
-  return { id, nome, ownerEmail, spreadsheetId, createdAt };
+  return { id, nome, ownerEmail, spreadsheetId: tabName, createdAt };
 }
 
 // ─── Membros ─────────────────────────────────────────────────────────────────

@@ -2,7 +2,9 @@ const express = require('express');
 const router  = express.Router();
 const { getControleById, isMembro, getServiceSheets } = require('../services/masterSheet');
 
-const SHEET_NAME = 'Gastos';
+// tabName vem de controle.spreadsheetId (ex: "gastos_<uuid>")
+// o spreadsheet é sempre a planilha mestre
+const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID;
 
 /**
  * Valida X-Controle-Id, busca o controle e verifica se o usuário é membro.
@@ -33,8 +35,8 @@ router.get('/', async (req, res) => {
     if (!controle) return;
 
     const response = await getServiceSheets().spreadsheets.values.get({
-      spreadsheetId: controle.spreadsheetId,
-      range: `${SHEET_NAME}!A2:H`,
+      spreadsheetId: MASTER_ID(),
+      range: `${controle.spreadsheetId}!A2:H`,
     });
 
     const rows = response.data.values || [];
@@ -77,8 +79,8 @@ router.post('/', async (req, res) => {
     const dataRegistro = new Date().toISOString();
 
     await getServiceSheets().spreadsheets.values.append({
-      spreadsheetId: controle.spreadsheetId,
-      range: `${SHEET_NAME}!A:H`,
+      spreadsheetId: MASTER_ID(),
+      range: `${controle.spreadsheetId}!A:H`,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
@@ -104,8 +106,8 @@ router.delete('/:id', async (req, res) => {
     const sheets = getServiceSheets();
 
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: controle.spreadsheetId,
-      range: `${SHEET_NAME}!A:A`,
+      spreadsheetId: MASTER_ID(),
+      range: `${controle.spreadsheetId}!A:A`,
     });
 
     const rows = response.data.values || [];
@@ -114,14 +116,14 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Lançamento não encontrado' });
     }
 
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: controle.spreadsheetId });
-    const sheet = spreadsheet.data.sheets.find(s => s.properties.title === SHEET_NAME);
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: MASTER_ID() });
+    const sheet = spreadsheet.data.sheets.find(s => s.properties.title === controle.spreadsheetId);
     if (!sheet) {
-      return res.status(404).json({ error: `Aba "${SHEET_NAME}" não encontrada` });
+      return res.status(404).json({ error: `Aba "${controle.spreadsheetId}" não encontrada` });
     }
 
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: controle.spreadsheetId,
+      spreadsheetId: MASTER_ID(),
       requestBody: {
         requests: [{
           deleteDimension: {
