@@ -19,6 +19,7 @@ function controleHeaders() {
 // ─── Estado ───────────────────────────────────────────────────────────────────
 let gastos           = [];
 let deleteTargetId   = null;
+let pluggyItemId     = null;
 let currentControleId   = null;
 let currentControleNome = null;
 let currentUser         = null; // { email, name, picture }
@@ -78,6 +79,16 @@ const filterResp     = document.getElementById('filter-responsavel');
 const modalConfirm   = document.getElementById('modal-confirm');
 const modalCancel    = document.getElementById('modal-cancel');
 const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+// ─── Elementos: Pluggy ───────────────────────────────────────────────────────────
+const btnImportarBanco  = document.getElementById('btn-importar-banco');
+const modalPluggy       = document.getElementById('modal-pluggy');
+const pluggyDataInicio  = document.getElementById('pluggy-data-inicio');
+const pluggyDataFim     = document.getElementById('pluggy-data-fim');
+const pluggyResponsavel = document.getElementById('pluggy-responsavel');
+const pluggyFeedback    = document.getElementById('pluggy-feedback');
+const btnPluggyCancelar  = document.getElementById('btn-pluggy-cancelar');
+const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
 
 // ─── Inicialização ────────────────────────────────────────────────────────────
 (async function init() {
@@ -599,3 +610,99 @@ function formatarData(iso) {
   const [ano, mes, dia] = iso.split('T')[0].split('-');
   return `${dia}/${mes}/${ano}`;
 }
+
+// ─── Pluggy: Importação bancária ──────────────────────────────────────────────────
+function fecharModalPluggy() {
+  modalPluggy.classList.add('hidden');
+  pluggyItemId = null;
+  pluggyFeedback.classList.add('hidden');
+  pluggyResponsavel.value = '';
+}
+
+btnPluggyCancelar.addEventListener('click', fecharModalPluggy);
+modalPluggy.querySelector('.modal-overlay').addEventListener('click', fecharModalPluggy);
+
+btnImportarBanco.addEventListener('click', async () => {
+  btnImportarBanco.disabled = true;
+  btnImportarBanco.textContent = 'Conectando...';
+  try {
+    const res  = await fetch(`${API_URL}/pluggy/connect-token`, {
+      method: 'POST',
+      headers: controleHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao obter token de conexão');
+
+    // Abre o widget do Pluggy
+    const pluggyConnect = new PluggyConnect({
+      connectToken: data.connectToken,
+      includeSandbox: true,
+      onSuccess: ({ item }) => {
+        pluggyItemId = item.id;
+        // Preenche datas padrão: últimos 30 dias
+        const hoje   = new Date();
+        const inicio = new Date();
+        inicio.setDate(inicio.getDate() - 30);
+        pluggyDataFim.value   = hoje.toISOString().split('T')[0];
+        pluggyDataInicio.value = inicio.toISOString().split('T')[0];
+        modalPluggy.classList.remove('hidden');
+      },
+      onError: (err) => {
+        console.error('Pluggy widget error:', err);
+        alert('Erro ao conectar ao banco. Tente novamente.');
+      },
+    });
+    pluggyConnect.init();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btnImportarBanco.disabled = false;
+    btnImportarBanco.textContent = '🏦 Importar do banco';
+  }
+});
+
+btnPluggyConfirmar.addEventListener('click', async () => {
+  const dataInicio  = pluggyDataInicio.value;
+  const dataFim     = pluggyDataFim.value;
+  const responsavel = pluggyResponsavel.value;
+
+  if (!dataInicio || !dataFim) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', 'Preencha as datas.');
+    return;
+  }
+  if (!responsavel) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', 'Selecione o responsável.');
+    return;
+  }
+  if (new Date(dataInicio) > new Date(dataFim)) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', 'A data de início deve ser anterior à data de fim.');
+    return;
+  }
+
+  btnPluggyConfirmar.disabled = true;
+  btnPluggyConfirmar.textContent = 'Importando...';
+  pluggyFeedback.classList.add('hidden');
+
+  try {
+    const res  = await fetch(`${API_URL}/pluggy/import`, {
+      method: 'POST',
+      headers: controleHeaders(),
+      body: JSON.stringify({ itemId: pluggyItemId, dataInicio, dataFim, responsavel }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao importar');
+
+    fecharModalPluggy();
+    await carregarGastos();
+    mostrarFeedback('success',
+      data.imported > 0
+        ? `${data.imported} transações importadas com sucesso!`
+        : data.message || 'Nenhuma transação encontrada no período.'
+    );
+  } catch (err) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', err.message);
+  } finally {
+    btnPluggyConfirmar.disabled = false;
+    btnPluggyConfirmar.textContent = 'Importar';
+  }
+});

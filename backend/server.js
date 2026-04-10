@@ -5,6 +5,7 @@ const cors = require('cors');
 const authRoutes     = require('./routes/auth');
 const gastosRoutes   = require('./routes/gastos');
 const controlesRoutes = require('./routes/controles');
+const pluggyRoutes   = require('./routes/pluggy');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -28,6 +29,7 @@ app.use('/auth', authRoutes);
 // ─── Rotas protegidas ────────────────────────────────────────────────────────
 app.use('/controles', requireAuth, controlesRoutes);
 app.use('/gastos',    requireAuth, gastosRoutes);
+app.use('/pluggy',    requireAuth, pluggyRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
