@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const { client } = require('../middleware/auth');
 
 const SCOPES = [
@@ -24,7 +25,7 @@ router.get('/google', (req, res) => {
   res.redirect(url);
 });
 
-// GET /auth/callback — recebe o code do Google e cria a sessão
+// GET /auth/callback — recebe o code do Google e gera o JWT
 router.get('/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) {
@@ -48,34 +49,51 @@ router.get('/callback', async (req, res) => {
       return res.redirect(`${process.env.FRONTEND_URL}?error=acesso_negado`);
     }
 
-    // Salva sessão
-    req.session.user = {
-      email: payload.email,
-      name: payload.name,
-      picture: payload.picture,
-    };
-    req.session.tokens = tokens;
+    // Gera JWT com dados do usuário e tokens OAuth
+    // O token é passado via URL fragment (#) — não aparece em logs de servidor
+    // nem é enviado como Referer, apenas acessível pelo JavaScript do frontend.
+    const jwtToken = jwt.sign(
+      {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+        tokens,
+      },
+      process.env.SESSION_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    res.redirect(process.env.FRONTEND_URL);
+    res.redirect(`${process.env.FRONTEND_URL}#token=${jwtToken}`);
   } catch (err) {
     console.error('Erro no callback OAuth:', err);
     res.redirect(`${process.env.FRONTEND_URL}?error=falha_autenticacao`);
   }
 });
 
-// GET /auth/me — retorna o usuário logado (ou 401)
+// GET /auth/me — valida o JWT enviado no header Authorization
 router.get('/me', (req, res) => {
-  if (req.session && req.session.user) {
-    return res.json({ user: req.session.user });
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Não autenticado' });
   }
-  return res.status(401).json({ error: 'Não autenticado' });
+  const token = auth.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, process.env.SESSION_SECRET);
+    return res.json({
+      user: {
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+      },
+    });
+  } catch {
+    return res.status(401).json({ error: 'Token inválido ou expirado' });
+  }
 });
 
-// POST /auth/logout — encerra a sessão
+// POST /auth/logout — o cliente apaga o token do localStorage; nada a fazer no servidor
 router.post('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.json({ message: 'Logout realizado' });
-  });
+  res.json({ message: 'Logout realizado' });
 });
 
 module.exports = router;

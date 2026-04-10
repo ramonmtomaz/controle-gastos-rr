@@ -1,8 +1,19 @@
 /* global API_URL */
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
-// Em produção substitua pela URL do seu backend no Render (ou onde hospedar).
 const API_URL = 'https://controle-gastos-rr.onrender.com';
+const TOKEN_KEY = 'auth_token';
+
+// ─── JWT helpers ─────────────────────────────────────────────────────────────
+function getToken()        { return localStorage.getItem(TOKEN_KEY); }
+function saveToken(t)      { localStorage.setItem(TOKEN_KEY, t); }
+function removeToken()     { localStorage.removeItem(TOKEN_KEY); }
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${getToken()}`,
+  };
+}
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
 let gastos = [];
@@ -31,14 +42,23 @@ const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 
 // ─── Inicialização ────────────────────────────────────────────────────────────
 (async function init() {
+  // Captura token enviado via URL fragment após OAuth (#token=...)
+  const hash = window.location.hash;
+  if (hash.startsWith('#token=')) {
+    const jwtToken = hash.slice(7);
+    saveToken(jwtToken);
+    // Limpa o hash da URL sem recarregar a página
+    history.replaceState(null, '', window.location.pathname);
+  }
+
   // Verifica erros retornados na URL (ex: ?error=acesso_negado)
   const params = new URLSearchParams(window.location.search);
   const erro = params.get('error');
   if (erro) {
     const mensagens = {
-      acesso_negado:    'Acesso negado. Seu e-mail não está autorizado.',
+      acesso_negado:      'Acesso negado. Seu e-mail não está autorizado.',
       falha_autenticacao: 'Falha na autenticação. Tente novamente.',
-      sem_codigo:       'Código de autenticação ausente. Tente novamente.',
+      sem_codigo:         'Código de autenticação ausente. Tente novamente.',
     };
     mostrarErroLogin(mensagens[erro] || 'Erro desconhecido.');
     history.replaceState({}, '', window.location.pathname);
@@ -47,13 +67,19 @@ const modalConfirmBtn = document.getElementById('modal-confirm-btn');
   // Define href do botão de login
   btnLogin.href = `${API_URL}/auth/google`;
 
-  // Verifica se já está autenticado
+  // Verifica se já está autenticado via JWT salvo
+  const token = getToken();
+  if (!token) { mostrarLogin(); return; }
+
   try {
-    const res = await fetch(`${API_URL}/auth/me`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/auth/me`, {
+      headers: authHeaders(),
+    });
     if (res.ok) {
       const { user } = await res.json();
       entrar(user);
     } else {
+      removeToken();
       mostrarLogin();
     }
   } catch {
@@ -88,7 +114,11 @@ function mostrarErroLogin(msg) {
 }
 
 btnLogout.addEventListener('click', async () => {
-  await fetch(`${API_URL}/auth/logout`, { method: 'POST', credentials: 'include' });
+  await fetch(`${API_URL}/auth/logout`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  removeToken();
   mostrarLogin();
 });
 
@@ -99,8 +129,8 @@ async function carregarGastos() {
   tbodyGastos.innerHTML = '';
 
   try {
-    const res = await fetch(`${API_URL}/gastos`, { credentials: 'include' });
-    if (res.status === 401) { mostrarLogin(); return; }
+    const res = await fetch(`${API_URL}/gastos`, { headers: authHeaders() });
+    if (res.status === 401) { removeToken(); mostrarLogin(); return; }
     if (!res.ok) throw new Error('Erro ao buscar dados');
     gastos = await res.json();
     renderizarTabela();
@@ -135,12 +165,11 @@ formGasto.addEventListener('submit', async (e) => {
   try {
     const res = await fetch(`${API_URL}/gastos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
+      headers: authHeaders(),
       body: JSON.stringify(payload),
     });
 
-    if (res.status === 401) { mostrarLogin(); return; }
+    if (res.status === 401) { removeToken(); mostrarLogin(); return; }
 
     const data = await res.json();
     if (!res.ok) {
@@ -266,9 +295,9 @@ modalConfirmBtn.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_URL}/gastos/${deleteTargetId}`, {
       method: 'DELETE',
-      credentials: 'include',
+      headers: authHeaders(),
     });
-    if (res.status === 401) { mostrarLogin(); return; }
+    if (res.status === 401) { removeToken(); mostrarLogin(); return; }
     if (!res.ok) {
       const data = await res.json();
       alert(data.error || 'Erro ao remover lançamento.');

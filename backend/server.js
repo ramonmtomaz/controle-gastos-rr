@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const session = require('express-session');
 const cors = require('cors');
 
 const authRoutes = require('./routes/auth');
@@ -21,19 +20,6 @@ app.use(cors({
 
 // ─── Body parser ─────────────────────────────────────────────────────────────
 app.use(express.json());
-
-// ─── Session ─────────────────────────────────────────────────────────────────
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 h
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-  },
-}));
 
 // ─── Rotas públicas (auth) ────────────────────────────────────────────────────
 app.use('/auth', authRoutes);

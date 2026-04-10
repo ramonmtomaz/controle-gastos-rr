@@ -1,3 +1,4 @@
+const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 
 const client = new OAuth2Client(
@@ -7,13 +8,23 @@ const client = new OAuth2Client(
 );
 
 /**
- * Middleware: bloqueia rotas para usuários não autenticados.
+ * Middleware: verifica o JWT enviado no header Authorization: Bearer <token>
+ * e expõe req.user (dados do usuário) e req.googleTokens (tokens OAuth).
  */
 function requireAuth(req, res, next) {
-  if (req.session && req.session.user) {
-    return next();
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Não autenticado' });
   }
-  return res.status(401).json({ error: 'Não autenticado' });
+  const token = auth.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, process.env.SESSION_SECRET);
+    req.user = payload;
+    req.googleTokens = payload.tokens;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Token inválido ou expirado' });
+  }
 }
 
 module.exports = { client, requireAuth };

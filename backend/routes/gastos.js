@@ -19,7 +19,7 @@ function getSheetsClient(tokens) {
 // Retorna todos os lançamentos da planilha (exceto o cabeçalho).
 router.get('/', async (req, res) => {
   try {
-    const sheets = getSheetsClient(req.session.tokens);
+    const sheets = getSheetsClient(req.googleTokens);
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!A2:H`,
@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const sheets = getSheetsClient(req.session.tokens);
+    const sheets = getSheetsClient(req.googleTokens);
 
     // Gera ID simples baseado em timestamp
     const id = Date.now().toString();
@@ -98,7 +98,7 @@ router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const sheets = getSheetsClient(req.session.tokens);
+    const sheets = getSheetsClient(req.googleTokens);
 
     // Busca todas as linhas para achar o índice
     const response = await sheets.spreadsheets.values.get({
