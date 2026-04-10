@@ -31,9 +31,9 @@ backend/    → Node.js + Express (Render ou similar)
    - Authorized redirect URIs:
      - `http://localhost:3001/auth/callback` (desenvolvimento)
      - `https://seu-backend.onrender.com/auth/callback` (produção)
-5. Copie o **Client ID** 640940450307-mkhdpenthjtt7cful39it0io3ls5erc6.apps.googleusercontent.com
+5. Copie o **Client ID** 
 
- e o **Client Secret**  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
+ e o **Client Secret** 
 
 ---
 
