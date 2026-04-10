@@ -3,17 +3,11 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { client } = require('../middleware/auth');
 
+// Apenas escopos para login — Sheets é acessado pela service account
 const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
-  'https://www.googleapis.com/auth/spreadsheets',
 ];
-
-// Lista de e-mails autorizados (separados por vírgula no .env)
-const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
 
 // GET /auth/google — redireciona para o consent screen do Google
 router.get('/google', (req, res) => {
@@ -44,21 +38,11 @@ router.get('/callback', async (req, res) => {
     const payload = ticket.getPayload();
     const email = payload.email.toLowerCase();
 
-    // Verifica se o e-mail está na lista de permitidos
-    if (ALLOWED_EMAILS.length > 0 && !ALLOWED_EMAILS.includes(email)) {
-      return res.redirect(`${process.env.FRONTEND_URL}?error=acesso_negado`);
-    }
-
-    // Gera JWT com dados do usuário e tokens OAuth
+    // Gera JWT com dados do usuário
     // O token é passado via URL fragment (#) — não aparece em logs de servidor
     // nem é enviado como Referer, apenas acessível pelo JavaScript do frontend.
     const jwtToken = jwt.sign(
-      {
-        email: payload.email,
-        name: payload.name,
-        picture: payload.picture,
-        tokens,
-      },
+      { email: payload.email, name: payload.name, picture: payload.picture },
       process.env.SESSION_SECRET,
       { expiresIn: '7d' }
     );

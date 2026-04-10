@@ -278,12 +278,93 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
 .modal-box p   { color: var(--text-muted); margin-bottom: 24px; font-size: 14px; }
 .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
 
+/* ─── Navbar (dashboard) ────────────────────────────────────────────────────── */
+.controle-nome-navbar {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-left: 10px;
+}
+
+/* ─── Lobby ─────────────────────────────────────────────────────────────────── */
+.lobby-section { padding: 28px; }
+
+.lobby-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.lobby-header h2 { font-size: 20px; }
+.lobby-btns      { display: flex; gap: 10px; flex-wrap: wrap; }
+.lobby-loading   { color: var(--text-muted); padding: 20px 0; font-size: 14px; }
+
+/* ─── Cards de controle ─────────────────────────────────────────────────────── */
+.controle-card {
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  transition: border-color .15s, box-shadow .15s;
+}
+.controle-card:hover   { border-color: var(--primary); box-shadow: var(--shadow-md); }
+.controle-card-header  { display: flex; align-items: center; gap: 12px; }
+.controle-card-nome    { font-size: 16px; font-weight: 700; }
+.controle-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.controle-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.badge-owner  { background: #dbeafe; color: #1e40af; }
+.badge-member { background: #f3e8ff; color: #6b21a8; }
+
+/* ─── Modal: membros ────────────────────────────────────────────────────────── */
+.modal-box-wide { max-width: 480px; }
+
+.membros-lista  { margin-bottom: 20px; }
+.membro-item    {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+}
+.membro-item:last-child { border-bottom: none; }
+.membro-email   { font-size: 14px; word-break: break-all; flex: 1; }
+.membro-right   { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.membro-role    { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 20px; }
+.role-owner     { background: #dbeafe; color: #1e40af; }
+.role-member    { background: #f3f4f6; color: #374151; }
+
+/* ─── Convite ───────────────────────────────────────────────────────────────── */
+.convite-section  { background: var(--bg); border-radius: var(--radius); padding: 16px; }
+.convite-section h4 { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+.invite-code-box  { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.invite-code      { font-family: monospace; font-size: 26px; font-weight: 900; letter-spacing: 6px; color: var(--text); }
+.invite-input     { text-transform: uppercase; letter-spacing: 4px; font-size: 18px; text-align: center; }
+.expira-text      { font-size: 12px; color: var(--text-muted); }
+
 /* ─── Responsivo ────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .summary-cards { grid-template-columns: 1fr; }
   .table-header  { flex-direction: column; }
   .table-filters { width: 100%; }
   .filter-input  { flex: 1; }
-  .navbar-brand  { font-size: 15px; }
+  .navbar-brand  { font-size: 15px; gap: 6px; flex-wrap: wrap; }
   .login-card    { padding: 36px 24px; }
+  .controle-card { flex-direction: column; align-items: flex-start; }
+  .lobby-header  { flex-direction: column; align-items: flex-start; }
 }

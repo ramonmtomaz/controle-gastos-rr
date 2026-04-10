@@ -2,8 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-const authRoutes = require('./routes/auth');
-const gastosRoutes = require('./routes/gastos');
+const authRoutes     = require('./routes/auth');
+const gastosRoutes   = require('./routes/gastos');
+const controlesRoutes = require('./routes/controles');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -25,7 +26,8 @@ app.use(express.json());
 app.use('/auth', authRoutes);
 
 // ─── Rotas protegidas ────────────────────────────────────────────────────────
-app.use('/gastos', requireAuth, gastosRoutes);
+app.use('/controles', requireAuth, controlesRoutes);
+app.use('/gastos',    requireAuth, gastosRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

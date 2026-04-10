@@ -20,7 +20,6 @@ function requireAuth(req, res, next) {
   try {
     const payload = jwt.verify(token, process.env.SESSION_SECRET);
     req.user = payload;
-    req.googleTokens = payload.tokens;
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido ou expirado' });

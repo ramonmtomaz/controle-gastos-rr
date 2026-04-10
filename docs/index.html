@@ -21,12 +21,43 @@
     </div>
   </div>
 
-  <!-- ─── App principal ──────────────────────────────────────────────────── -->
+  <!-- ─── Tela de lobby ─────────────────────────────────────────────────────── -->
+  <div id="lobby-screen" class="hidden">
+    <header class="navbar">
+      <div class="navbar-brand">💰 Controle de Gastos RR</div>
+      <div class="navbar-user">
+        <img id="lobby-user-picture" src="" alt="Foto" class="user-avatar" />
+        <span id="lobby-user-name"></span>
+        <button id="btn-lobby-logout" class="btn btn-outline btn-sm">Sair</button>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card lobby-section">
+        <div class="lobby-header">
+          <h2>Seus Controles</h2>
+          <div class="lobby-btns">
+            <button id="btn-participar-controle" class="btn btn-outline">Participar com código</button>
+            <button id="btn-criar-controle" class="btn btn-primary">+ Criar Controle</button>
+          </div>
+        </div>
+        <div id="lobby-controles"></div>
+        <div id="lobby-empty" class="empty-state hidden">
+          Você não participa de nenhum controle ainda.<br />
+          Crie um novo ou use um código de convite.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ─── App principal ──────────────────────────────────────────────────────── -->
   <div id="app" class="hidden">
 
     <!-- Navbar -->
     <header class="navbar">
-      <div class="navbar-brand">💰 Controle de Gastos RR</div>
+      <div class="navbar-brand">
+        <button id="btn-lobby" class="btn btn-outline btn-sm">← Controles</button>
+        <span id="controle-nome" class="controle-nome-navbar"></span>
+      </div>
       <div class="navbar-user">
         <img id="user-picture" src="" alt="Foto" class="user-avatar" />
         <span id="user-name"></span>
@@ -162,6 +193,63 @@
       </section>
 
     </main>
+  </div>
+
+  <!-- Modal: Criar Controle -->
+  <div id="modal-criar" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-box">
+      <h3>Criar Controle</h3>
+      <p>Informe um nome para identificar este controle.</p>
+      <div class="form-group">
+        <label for="input-nome-controle">Nome do controle *</label>
+        <input type="text" id="input-nome-controle" placeholder="Ex: Gastos Casa RR" maxlength="60" />
+      </div>
+      <div id="criar-feedback" class="feedback hidden"></div>
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button id="btn-criar-cancelar" class="btn btn-outline">Cancelar</button>
+        <button id="btn-criar-confirmar" class="btn btn-primary">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Participar de Controle -->
+  <div id="modal-participar" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-box">
+      <h3>Participar de Controle</h3>
+      <p>Peça o código de convite ao dono do controle.</p>
+      <div class="form-group">
+        <label for="input-codigo">Código de convite *</label>
+        <input type="text" id="input-codigo" placeholder="Ex: A3F8C2D1" maxlength="8"
+          class="invite-input" autocomplete="off" />
+      </div>
+      <div id="participar-feedback" class="feedback hidden"></div>
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button id="btn-participar-cancelar" class="btn btn-outline">Cancelar</button>
+        <button id="btn-participar-confirmar" class="btn btn-primary">Entrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Membros e Convite -->
+  <div id="modal-membros" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-box modal-box-wide">
+      <h3 id="membros-titulo">Membros</h3>
+      <div id="membros-lista" class="membros-lista"></div>
+      <div class="convite-section">
+        <h4>Código de convite</h4>
+        <div class="invite-code-box">
+          <span id="convite-codigo" class="invite-code"></span>
+          <button id="btn-copiar-codigo" class="btn btn-outline btn-sm">Copiar</button>
+        </div>
+        <small id="convite-expira" class="expira-text"></small>
+      </div>
+      <div class="modal-actions" style="margin-top: 20px;">
+        <button id="btn-membros-fechar" class="btn btn-outline">Fechar</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal de confirmação de exclusão -->

@@ -1,40 +1,52 @@
 const express = require('express');
-const router = express.Router();
-const { google } = require('googleapis');
-const { client } = require('../middleware/auth');
+const router  = express.Router();
+const { getControleById, isMembro, getServiceSheets } = require('../services/masterSheet');
 
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const SHEET_NAME = process.env.SHEET_NAME || 'Gastos';
+const SHEET_NAME = 'Gastos';
 
 /**
- * Retorna um cliente autenticado da Sheets API usando os tokens da sessão.
+ * Valida X-Controle-Id, busca o controle e verifica se o usuário é membro.
+ * Retorna o objeto controle ou envia a resposta de erro e retorna null.
  */
-function getSheetsClient(tokens) {
-  const authClient = Object.create(client);
-  authClient.setCredentials(tokens);
-  return google.sheets({ version: 'v4', auth: authClient });
+async function resolveControle(req, res) {
+  const controleId = req.headers['x-controle-id'];
+  if (!controleId) {
+    res.status(400).json({ error: 'Header X-Controle-Id é obrigatório' });
+    return null;
+  }
+  const controle = await getControleById(controleId);
+  if (!controle) {
+    res.status(404).json({ error: 'Controle não encontrado' });
+    return null;
+  }
+  if (!(await isMembro(controleId, req.user.email))) {
+    res.status(403).json({ error: 'Acesso negado a este controle' });
+    return null;
+  }
+  return controle;
 }
 
 // ─── GET /gastos ─────────────────────────────────────────────────────────────
-// Retorna todos os lançamentos da planilha (exceto o cabeçalho).
 router.get('/', async (req, res) => {
   try {
-    const sheets = getSheetsClient(req.googleTokens);
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
+
+    const response = await getServiceSheets().spreadsheets.values.get({
+      spreadsheetId: controle.spreadsheetId,
       range: `${SHEET_NAME}!A2:H`,
     });
 
     const rows = response.data.values || [];
     const gastos = rows.map((row) => ({
-      id:            row[0] || '',
-      data:          row[1] || '',
-      valor:         row[2] || '',
-      categoria:     row[3] || '',
-      descricao:     row[4] || '',
-      responsavel:   row[5] || '',
-      tipo:          row[6] || '',
-      dataRegistro:  row[7] || '',
+      id:           row[0] || '',
+      data:         row[1] || '',
+      valor:        row[2] || '',
+      categoria:    row[3] || '',
+      descricao:    row[4] || '',
+      responsavel:  row[5] || '',
+      tipo:         row[6] || '',
+      dataRegistro: row[7] || '',
     }));
 
     res.json(gastos);
@@ -45,7 +57,6 @@ router.get('/', async (req, res) => {
 });
 
 // ─── POST /gastos ─────────────────────────────────────────────────────────────
-// Adiciona um novo lançamento no final da planilha.
 router.post('/', async (req, res) => {
   const { data, valor, categoria, descricao, responsavel, tipo } = req.body;
 
@@ -53,36 +64,26 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios: data, valor, categoria, responsavel, tipo' });
   }
 
-  // Validação básica do valor
   const valorNumerico = parseFloat(String(valor).replace(',', '.'));
   if (isNaN(valorNumerico) || valorNumerico <= 0) {
     return res.status(400).json({ error: 'Valor inválido' });
   }
 
   try {
-    const sheets = getSheetsClient(req.googleTokens);
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
 
-    // Gera ID simples baseado em timestamp
-    const id = Date.now().toString();
+    const id          = Date.now().toString();
     const dataRegistro = new Date().toISOString();
 
-    const novaLinha = [
-      id,
-      data,
-      valorNumerico.toFixed(2),
-      categoria,
-      descricao || '',
-      responsavel,
-      tipo,
-      dataRegistro,
-    ];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
+    await getServiceSheets().spreadsheets.values.append({
+      spreadsheetId: controle.spreadsheetId,
       range: `${SHEET_NAME}!A:H`,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: [novaLinha] },
+      requestBody: {
+        values: [[id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipo, dataRegistro]],
+      },
     });
 
     res.status(201).json({ message: 'Lançamento adicionado', id });
@@ -93,38 +94,34 @@ router.post('/', async (req, res) => {
 });
 
 // ─── DELETE /gastos/:id ───────────────────────────────────────────────────────
-// Remove um lançamento pelo ID (busca na coluna A e deleta a linha).
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
-    const sheets = getSheetsClient(req.googleTokens);
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
 
-    // Busca todas as linhas para achar o índice
+    const sheets = getServiceSheets();
+
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId: controle.spreadsheetId,
       range: `${SHEET_NAME}!A:A`,
     });
 
     const rows = response.data.values || [];
-    // linha 0 = cabeçalho, linhas seguintes = dados (índice base-0, mas na planilha a linha 1 é o cabeçalho)
     const rowIndex = rows.findIndex((row) => row[0] === id);
-
     if (rowIndex === -1) {
       return res.status(404).json({ error: 'Lançamento não encontrado' });
     }
 
-    // Busca o sheetId da aba pelo nome
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-    const sheet = spreadsheet.data.sheets.find(
-      (s) => s.properties.title === SHEET_NAME
-    );
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: controle.spreadsheetId });
+    const sheet = spreadsheet.data.sheets.find(s => s.properties.title === SHEET_NAME);
     if (!sheet) {
       return res.status(404).json({ error: `Aba "${SHEET_NAME}" não encontrada` });
     }
 
     await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId: controle.spreadsheetId,
       requestBody: {
         requests: [{
           deleteDimension: {
