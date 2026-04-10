@@ -1,33 +1,21 @@
 const express = require('express');
 const router  = express.Router();
-const https   = require('https');
 const { getControleById, isMembro, getServiceSheets } = require('../services/masterSheet');
 
-const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID;
+const MASTER_ID    = () => process.env.MASTER_SPREADSHEET_ID;
+const PLUGGY_BASE  = 'https://api.pluggy.ai';
 
-// ─── Helper: requisição HTTPS para a API Pluggy ───────────────────────────────
-function pluggyRequest(method, path, body, apiKey) {
-  return new Promise((resolve, reject) => {
-    const bodyStr = body ? JSON.stringify(body) : '';
-    const headers = { 'Content-Type': 'application/json', 'accept': 'application/json' };
-    if (apiKey) headers['X-API-KEY'] = apiKey;
-    if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr);
+// ─── Helper: requisição para a API Pluggy (fetch nativo Node 18+) ─────────────
+async function pluggyRequest(method, path, body, apiKey) {
+  const headers = { 'Content-Type': 'application/json', 'accept': 'application/json' };
+  if (apiKey) headers['X-API-KEY'] = apiKey;
 
-    const req = https.request(
-      { hostname: 'api.pluggy.ai', path, method, headers },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-          catch { resolve({ status: res.statusCode, body: data }); }
-        });
-      }
-    );
-    req.on('error', reject);
-    if (bodyStr) req.write(bodyStr);
-    req.end();
-  });
+  const options = { method, headers };
+  if (body) options.body = JSON.stringify(body);
+
+  const res  = await fetch(`${PLUGGY_BASE}${path}`, options);
+  const data = await res.json();
+  return { status: res.status, body: data };
 }
 
 async function getPluggyApiKey() {
@@ -37,7 +25,7 @@ async function getPluggyApiKey() {
     throw new Error('PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET não configurados');
   }
   const res = await pluggyRequest('POST', '/auth', { clientId, clientSecret }, null);
-  if (res.status !== 200) throw new Error(`Pluggy auth falhou: ${JSON.stringify(res.body)}`);
+  if (res.status !== 200) throw new Error(`Pluggy auth falhou (${res.status}): ${JSON.stringify(res.body)}`);
   return res.body.apiKey;
 }
 
