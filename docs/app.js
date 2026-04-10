@@ -501,15 +501,15 @@ function renderizarTabela() {
   lista.forEach((g) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${formatarData(g.data)}</td>
-      <td><span class="tag tag-${g.tipo.toLowerCase()}">${escapeHtml(g.tipo)}</span></td>
-      <td>${escapeHtml(g.categoria)}</td>
-      <td>${escapeHtml(g.descricao) || '—'}</td>
-      <td><span class="tag tag-${g.responsavel.toLowerCase()}">${escapeHtml(g.responsavel)}</span></td>
-      <td class="text-right ${g.tipo === 'Gasto' ? 'valor-gasto' : 'valor-investimento'}">
+      <td data-label="Data">${formatarData(g.data)}</td>
+      <td data-label="Tipo"><span class="tag tag-${g.tipo.toLowerCase()}">${escapeHtml(g.tipo)}</span></td>
+      <td data-label="Categoria">${escapeHtml(g.categoria)}</td>
+      <td data-label="Descrição">${escapeHtml(g.descricao) || '—'}</td>
+      <td data-label="Responsável"><span class="tag tag-${g.responsavel.toLowerCase()}">${escapeHtml(g.responsavel)}</span></td>
+      <td data-label="Valor" class="text-right ${g.tipo === 'Gasto' ? 'valor-gasto' : 'valor-investimento'}">
         ${formatarValor(g.valor)}
       </td>
-      <td class="text-center">
+      <td class="td-action">
         <button class="btn-delete" data-id="${escapeHtml(g.id)}" title="Remover">🗑</button>
       </td>
     `;

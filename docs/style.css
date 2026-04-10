@@ -359,12 +359,105 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
 
 /* ─── Responsivo ────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .summary-cards { grid-template-columns: 1fr; }
-  .table-header  { flex-direction: column; }
-  .table-filters { width: 100%; }
-  .filter-input  { flex: 1; }
-  .navbar-brand  { font-size: 15px; gap: 6px; flex-wrap: wrap; }
-  .login-card    { padding: 36px 24px; }
-  .controle-card { flex-direction: column; align-items: flex-start; }
-  .lobby-header  { flex-direction: column; align-items: flex-start; }
+  body { font-size: 14px; }
+
+  .container { padding: 14px 12px; gap: 14px; }
+
+  /* Navbar */
+  .navbar { padding: 0 12px; height: 52px; }
+  .navbar-brand { font-size: 14px; gap: 6px; }
+  .user-avatar { width: 30px; height: 30px; }
+  #user-name, #lobby-user-name { display: none; }
+
+  /* Login */
+  .login-card { padding: 36px 20px; margin: 16px; }
+
+  /* Summary */
+  .summary-cards { grid-template-columns: repeat(3,1fr); gap: 10px; }
+  .summary-value { font-size: 16px; }
+  .summary-label { font-size: 11px; }
+  .card { padding: 16px; }
+
+  /* Formulário */
+  .form-section h2 { font-size: 16px; margin-bottom: 14px; }
+  .form-grid { grid-template-columns: 1fr; gap: 12px; }
+  .form-group-full { grid-column: 1; }
+  .form-actions { flex-direction: column-reverse; gap: 10px; }
+  .form-actions .btn { width: 100%; justify-content: center; }
+  .feedback { flex: none; }
+
+  /* Tabela header */
+  .table-section h2 { font-size: 16px; }
+  .table-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .table-filters { width: 100%; flex-direction: column; gap: 8px; }
+  .filter-input { width: 100%; min-width: unset; }
+  #btn-refresh { width: 100%; justify-content: center; }
+
+  /* Tabela → cards */
+  .table-wrapper { overflow-x: unset; }
+  table, thead, tbody, th, td, tr { display: block; }
+  thead { display: none; }
+  tbody tr {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    padding: 12px 14px 8px;
+    position: relative;
+    border-bottom: 1.5px solid var(--border);
+  }
+  tbody tr:hover { background: var(--surface); }
+  tbody td {
+    padding: 5px 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+  tbody td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    min-width: 88px;
+    flex-shrink: 0;
+  }
+  tbody td.td-action {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 0;
+  }
+  tbody td.td-action::before { display: none; }
+  tbody td.text-right { text-align: left; }
+
+  /* Modal → bottom sheet */
+  .modal { align-items: flex-end; }
+  .modal-box {
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 24px 20px 32px;
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .modal-box-wide { max-width: 100%; }
+  .modal-actions { flex-direction: column-reverse; gap: 10px; }
+  .modal-actions .btn { width: 100%; justify-content: center; }
+
+  /* Lobby */
+  .lobby-section { padding: 16px; }
+  .lobby-header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+  .lobby-header h2 { font-size: 18px; }
+  .lobby-btns { flex-direction: column; width: 100%; }
+  .lobby-btns .btn { width: 100%; justify-content: center; }
+  .controle-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .controle-card-actions { width: 100%; }
+  .controle-card-actions .btn { flex: 1; justify-content: center; }
+
+  /* Convite */
+  .invite-code { font-size: 22px; letter-spacing: 4px; }
+  .invite-code-box { flex-wrap: wrap; }
 }
