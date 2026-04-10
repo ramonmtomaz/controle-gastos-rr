@@ -2,7 +2,7 @@
 
 // ─── Configuração ─────────────────────────────────────────────────────────────
 // Em produção substitua pela URL do seu backend no Render (ou onde hospedar).
-const API_URL = 'http://localhost:3001';
+const API_URL = 'https://controle-gastos-rr.onrender.com';
 
 // ─── Estado ───────────────────────────────────────────────────────────────────
 let gastos = [];
