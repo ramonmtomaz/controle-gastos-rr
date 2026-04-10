@@ -46,7 +46,8 @@ async function getPluggyApiKey() {
 router.post('/connect-token', async (req, res) => {
   try {
     const apiKey    = await getPluggyApiKey();
-    const tokenRes  = await pluggyRequest('POST', '/connect_tokens', {}, apiKey);
+    // clientUserId identifica o usuário final no sistema Pluggy (obrigatório para 200)
+    const tokenRes  = await pluggyRequest('POST', '/connect_tokens', { clientUserId: req.user.email }, apiKey);
     if (tokenRes.status !== 200) {
       throw new Error(`Erro ao gerar connect token: ${JSON.stringify(tokenRes.body)}`);
     }
