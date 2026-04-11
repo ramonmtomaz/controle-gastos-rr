@@ -25,8 +25,11 @@ async function getPluggyApiKey() {
     throw new Error('PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET não configurados');
   }
   const res = await pluggyRequest('POST', '/auth', { clientId, clientSecret }, null);
+  console.log('[Pluggy] /auth status:', res.status, '| body keys:', Object.keys(res.body || {}));
   if (res.status !== 200) throw new Error(`Pluggy auth falhou (${res.status}): ${JSON.stringify(res.body)}`);
-  return res.body.apiKey;
+  const apiKey = res.body.apiKey || res.body.api_key;
+  if (!apiKey) throw new Error(`Pluggy auth: apiKey ausente. Campos recebidos: ${Object.keys(res.body)}`);
+  return apiKey;
 }
 
 // ─── POST /pluggy/connect-token ───────────────────────────────────────────────
