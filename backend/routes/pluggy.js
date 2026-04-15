@@ -48,7 +48,7 @@ async function getPluggyApiKey() {
 router.post('/connect-token', async (req, res) => {
   try {
     const pluggy = getPluggyClient();
-    const connectToken = await pluggy.createConnectToken({
+    const connectToken = await pluggy.createConnectToken(undefined, {
       clientUserId: req.user?.email || `user-${Date.now()}`,
     });
     res.json({ connectToken: connectToken.accessToken });
