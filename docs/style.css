@@ -117,6 +117,41 @@ body {
   gap: 24px;
 }
 
+/* ─── Dashboard menu ──────────────────────────────────────────────────────── */
+.dashboard-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px;
+}
+
+.dashboard-menu-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.dashboard-menu-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary-h);
+}
+
+.dashboard-menu-btn.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.dashboard-area {
+  width: 100%;
+}
+
 /* ─── Summary cards ─────────────────────────────────────────────────────────── */
 .summary-cards {
   display: grid;
@@ -250,6 +285,25 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   text-align: center;
   color: var(--text-muted);
   padding: 40px 0;
+  font-size: 14px;
+}
+
+/* ─── Bancos e conta ──────────────────────────────────────────────────────── */
+.bancos-section,
+.conta-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bancos-section h2,
+.conta-section h2 {
+  font-size: 18px;
+}
+
+.bancos-subtitle,
+.conta-subtitle {
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -460,6 +514,17 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
 
   .container { padding: 14px 12px; gap: 14px; }
 
+  .dashboard-menu {
+    padding: 10px;
+    gap: 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .dashboard-menu-btn {
+    white-space: nowrap;
+  }
+
   /* Navbar */
   .navbar { padding: 0 12px; height: 52px; }
   .navbar-brand { font-size: 14px; gap: 6px; }
@@ -488,7 +553,7 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   .table-header { flex-direction: column; align-items: flex-start; gap: 12px; }
   .table-filters { width: 100%; flex-direction: column; gap: 8px; }
   .filter-input { width: 100%; min-width: unset; }
-  #btn-refresh, #btn-importar-banco { width: 100%; justify-content: center; }
+  #btn-refresh, #btn-importar-banco, #btn-conta-salvar { width: 100%; justify-content: center; }
 
   /* Tabela → cards */
   .table-wrapper { overflow-x: unset; }

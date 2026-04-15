@@ -67,132 +67,175 @@
     </header>
 
     <main class="container">
+      <section class="card dashboard-menu" id="dashboard-menu">
+        <button class="dashboard-menu-btn is-active" data-area="resumo">Resumo</button>
+        <button class="dashboard-menu-btn" data-area="lancar">Lançar gasto</button>
+        <button class="dashboard-menu-btn" data-area="lancamentos">Lançamentos</button>
+        <button class="dashboard-menu-btn" data-area="bancos">Bancos</button>
+        <button class="dashboard-menu-btn" data-area="conta">Conta</button>
+      </section>
 
-      <!-- Resumo -->
-      <section class="summary-cards">
-        <div class="card summary-card">
-          <span class="summary-label">Total de Gastos</span>
-          <span class="summary-value expense" id="total-gastos">R$ 0,00</span>
-        </div>
-        <div class="card summary-card">
-          <span class="summary-label">Total de Investimentos</span>
-          <span class="summary-value investment" id="total-investimentos">R$ 0,00</span>
-        </div>
-        <div class="card summary-card">
-          <span class="summary-label">Lançamentos</span>
-          <span class="summary-value" id="total-lancamentos">0</span>
+      <section class="dashboard-area" id="area-resumo">
+        <div class="summary-cards">
+          <div class="card summary-card">
+            <span class="summary-label">Total de Gastos</span>
+            <span class="summary-value expense" id="total-gastos">R$ 0,00</span>
+          </div>
+          <div class="card summary-card">
+            <span class="summary-label">Total de Investimentos</span>
+            <span class="summary-value investment" id="total-investimentos">R$ 0,00</span>
+          </div>
+          <div class="card summary-card">
+            <span class="summary-label">Lançamentos</span>
+            <span class="summary-value" id="total-lancamentos">0</span>
+          </div>
         </div>
       </section>
 
-      <!-- Formulário de novo lançamento -->
-      <section class="card form-section">
-        <h2>Novo Lançamento</h2>
-        <form id="form-gasto">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="input-data">Data *</label>
-              <input type="date" id="input-data" required />
+      <section class="dashboard-area hidden" id="area-lancar">
+        <section class="card form-section">
+          <h2>Novo Lançamento</h2>
+          <form id="form-gasto">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="input-data">Data *</label>
+                <input type="date" id="input-data" required />
+              </div>
+              <div class="form-group">
+                <label for="input-valor">Valor (R$) *</label>
+                <input type="number" id="input-valor" step="0.01" min="0.01" placeholder="0,00" required />
+              </div>
+              <div class="form-group">
+                <label for="input-tipo">Tipo *</label>
+                <select id="input-tipo" required>
+                  <option value="">Selecione...</option>
+                  <option value="Gasto">Gasto</option>
+                  <option value="Investimento">Investimento</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="input-categoria">Categoria *</label>
+                <select id="input-categoria" required>
+                  <option value="">Selecione...</option>
+                  <optgroup label="Gastos">
+                    <option value="Alimentação">Alimentação</option>
+                    <option value="Transporte">Transporte</option>
+                    <option value="Moradia">Moradia</option>
+                    <option value="Saúde">Saúde</option>
+                    <option value="Educação">Educação</option>
+                    <option value="Lazer">Lazer</option>
+                    <option value="Vestuário">Vestuário</option>
+                    <option value="Assinaturas">Assinaturas</option>
+                    <option value="Outros">Outros</option>
+                  </optgroup>
+                  <optgroup label="Investimentos">
+                    <option value="Renda Fixa">Renda Fixa</option>
+                    <option value="Renda Variável">Renda Variável</option>
+                    <option value="Poupança">Poupança</option>
+                    <option value="Previdência">Previdência</option>
+                    <option value="Cripto">Cripto</option>
+                    <option value="Imóvel">Imóvel</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="input-responsavel">Responsável *</label>
+                <select id="input-responsavel" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="form-group form-group-full">
+                <label for="input-descricao">Descrição</label>
+                <input type="text" id="input-descricao" placeholder="Ex: Compras no mercado" maxlength="200" />
+              </div>
             </div>
-            <div class="form-group">
-              <label for="input-valor">Valor (R$) *</label>
-              <input type="number" id="input-valor" step="0.01" min="0.01" placeholder="0,00" required />
+            <div class="form-actions">
+              <div id="form-feedback" class="feedback hidden"></div>
+              <button type="submit" class="btn btn-primary" id="btn-submit">Adicionar</button>
             </div>
-            <div class="form-group">
-              <label for="input-tipo">Tipo *</label>
-              <select id="input-tipo" required>
-                <option value="">Selecione...</option>
-                <option value="Gasto">Gasto</option>
-                <option value="Investimento">Investimento</option>
+          </form>
+        </section>
+      </section>
+
+      <section class="dashboard-area hidden" id="area-lancamentos">
+        <section class="card table-section">
+          <div class="table-header">
+            <h2>Lançamentos</h2>
+            <div class="table-filters">
+              <input type="text" id="filter-search" placeholder="Buscar..." class="filter-input" />
+              <select id="filter-tipo" class="filter-input">
+                <option value="">Todos os tipos</option>
+                <option value="Gasto">Gastos</option>
+                <option value="Investimento">Investimentos</option>
               </select>
+              <select id="filter-responsavel" class="filter-input">
+                <option value="">Todos</option>
+              </select>
+              <select id="filter-banco" class="filter-input">
+                <option value="">Todos os bancos</option>
+              </select>
+              <button id="btn-refresh" class="btn btn-outline btn-sm" title="Atualizar">↻ Atualizar</button>
+            </div>
+          </div>
+
+          <div id="loading" class="loading hidden">Carregando...</div>
+          <div id="empty-state" class="empty-state hidden">Nenhum lançamento encontrado.</div>
+
+          <div class="table-wrapper">
+            <table id="tabela-gastos">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Categoria</th>
+                  <th>Descrição</th>
+                  <th>Banco</th>
+                  <th>Responsável</th>
+                  <th class="text-right">Valor</th>
+                  <th class="text-center">Ação</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-gastos"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="dashboard-area hidden" id="area-bancos">
+        <section class="card bancos-section">
+          <h2>Bancos</h2>
+          <p class="bancos-subtitle">Conecte instituições e importe transações pelo Pluggy quando precisar.</p>
+          <button id="btn-importar-banco" class="btn btn-primary">🏦 Abrir importação bancária</button>
+        </section>
+      </section>
+
+      <section class="dashboard-area hidden" id="area-conta">
+        <section class="card conta-section">
+          <h2>Conta</h2>
+          <p class="conta-subtitle">Esses dados são globais para seu usuário em todos os controles.</p>
+          <form id="form-conta" class="form-grid">
+            <div class="form-group">
+              <label for="conta-email">Email</label>
+              <input type="text" id="conta-email" readonly />
             </div>
             <div class="form-group">
-              <label for="input-categoria">Categoria *</label>
-              <select id="input-categoria" required>
-                <option value="">Selecione...</option>
-                <optgroup label="Gastos">
-                  <option value="Alimentação">Alimentação</option>
-                  <option value="Transporte">Transporte</option>
-                  <option value="Moradia">Moradia</option>
-                  <option value="Saúde">Saúde</option>
-                  <option value="Educação">Educação</option>
-                  <option value="Lazer">Lazer</option>
-                  <option value="Vestuário">Vestuário</option>
-                  <option value="Assinaturas">Assinaturas</option>
-                  <option value="Outros">Outros</option>
-                </optgroup>
-                <optgroup label="Investimentos">
-                  <option value="Renda Fixa">Renda Fixa</option>
-                  <option value="Renda Variável">Renda Variável</option>
-                  <option value="Poupança">Poupança</option>
-                  <option value="Previdência">Previdência</option>
-                  <option value="Cripto">Cripto</option>
-                  <option value="Imóvel">Imóvel</option>
-                </optgroup>
-              </select>
+              <label for="conta-nome">Nome exibido *</label>
+              <input type="text" id="conta-nome" maxlength="80" required />
             </div>
             <div class="form-group">
-              <label for="input-responsavel">Responsável *</label>
-              <select id="input-responsavel" required>
-                <option value="">Selecione...</option>
-                <option value="Eu">Eu</option>
-                <option value="Esposa">Esposa</option>
-                <option value="Casal">Casal</option>
-              </select>
+              <label for="conta-telefone">Telefone</label>
+              <input type="text" id="conta-telefone" maxlength="25" placeholder="(00) 00000-0000" />
             </div>
             <div class="form-group form-group-full">
-              <label for="input-descricao">Descrição</label>
-              <input type="text" id="input-descricao" placeholder="Ex: Compras no mercado" maxlength="200" />
+              <label for="conta-foto">Foto do Google</label>
+              <input type="text" id="conta-foto" readonly />
             </div>
-          </div>
-          <div class="form-actions">
-            <div id="form-feedback" class="feedback hidden"></div>
-            <button type="submit" class="btn btn-primary" id="btn-submit">Adicionar</button>
-          </div>
-        </form>
-      </section>
-
-      <!-- Tabela de lançamentos -->
-      <section class="card table-section">
-        <div class="table-header">
-          <h2>Lançamentos</h2>
-          <div class="table-filters">
-            <input type="text" id="filter-search" placeholder="Buscar..." class="filter-input" />
-            <select id="filter-tipo" class="filter-input">
-              <option value="">Todos os tipos</option>
-              <option value="Gasto">Gastos</option>
-              <option value="Investimento">Investimentos</option>
-            </select>
-            <select id="filter-responsavel" class="filter-input">
-              <option value="">Todos</option>
-            </select>
-            <select id="filter-banco" class="filter-input">
-              <option value="">Todos os bancos</option>
-            </select>
-            <button id="btn-refresh" class="btn btn-outline btn-sm" title="Atualizar">↻ Atualizar</button>
-            <button id="btn-importar-banco" class="btn btn-outline btn-sm">🏦 Importar do banco</button>
-          </div>
-        </div>
-
-        <div id="loading" class="loading hidden">Carregando...</div>
-        <div id="empty-state" class="empty-state hidden">Nenhum lançamento encontrado.</div>
-
-        <div class="table-wrapper">
-          <table id="tabela-gastos">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th>Categoria</th>
-                <th>Descrição</th>
-                <th>Banco</th>
-                <th>Responsável</th>
-                <th class="text-right">Valor</th>
-                <th class="text-center">Ação</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-gastos"></tbody>
-          </table>
-        </div>
+            <div class="form-actions form-group-full">
+              <div id="conta-feedback" class="feedback hidden"></div>
+              <button type="submit" id="btn-conta-salvar" class="btn btn-primary">Salvar alterações</button>
+            </div>
+          </form>
+        </section>
       </section>
 
     </main>

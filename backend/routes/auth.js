@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const { client } = require('../middleware/auth');
+const { client, requireAuth } = require('../middleware/auth');
+const { getOrCreateUserProfile, updateUserProfile } = require('../services/masterSheet');
 
 // Apenas escopos para login — Sheets é acessado pela service account
 const SCOPES = [
@@ -72,6 +73,45 @@ router.get('/me', (req, res) => {
     });
   } catch {
     return res.status(401).json({ error: 'Token inválido ou expirado' });
+  }
+});
+
+// GET /auth/profile — lê ou cria perfil global editável do usuário
+router.get('/profile', requireAuth, async (req, res) => {
+  try {
+    const profile = await getOrCreateUserProfile(req.user.email, {
+      displayName: req.user.name,
+      pictureUrl: req.user.picture,
+    });
+    res.json({ profile });
+  } catch (err) {
+    console.error('Erro ao carregar perfil:', err);
+    res.status(500).json({ error: 'Erro ao carregar perfil do usuário' });
+  }
+});
+
+// PATCH /auth/profile — atualiza nome exibido e telefone
+router.patch('/profile', requireAuth, async (req, res) => {
+  const { displayName, phone } = req.body || {};
+
+  if (displayName !== undefined && !String(displayName).trim()) {
+    return res.status(400).json({ error: 'Nome exibido é obrigatório' });
+  }
+
+  const sanitizedPhone = phone === undefined
+    ? undefined
+    : String(phone).replace(/[^0-9()+\-\s]/g, '').trim();
+
+  try {
+    const profile = await updateUserProfile(req.user.email, {
+      displayName,
+      phone: sanitizedPhone,
+      pictureUrl: req.user.picture,
+    });
+    res.json({ profile });
+  } catch (err) {
+    console.error('Erro ao atualizar perfil:', err);
+    res.status(500).json({ error: 'Erro ao atualizar perfil do usuário' });
   }
 });
 

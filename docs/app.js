@@ -21,6 +21,8 @@ let gastos           = [];
 let deleteTargetId   = null;
 let currentMembers      = [];
 let currentPluggyItems  = [];
+let currentProfile      = null;
+let currentDashboardArea = 'resumo';
 let currentControleId   = null;
 let currentControleNome = null;
 let currentControleOwnerEmail = null;
@@ -82,6 +84,23 @@ const filterBanco    = document.getElementById('filter-banco');
 const modalConfirm   = document.getElementById('modal-confirm');
 const modalCancel    = document.getElementById('modal-cancel');
 const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+const dashboardMenuButtons = Array.from(document.querySelectorAll('.dashboard-menu-btn'));
+const dashboardAreas = {
+  resumo: document.getElementById('area-resumo'),
+  lancar: document.getElementById('area-lancar'),
+  lancamentos: document.getElementById('area-lancamentos'),
+  bancos: document.getElementById('area-bancos'),
+  conta: document.getElementById('area-conta'),
+};
+
+// ─── Elementos: Conta ───────────────────────────────────────────────────────
+const formConta       = document.getElementById('form-conta');
+const contaEmail      = document.getElementById('conta-email');
+const contaNome       = document.getElementById('conta-nome');
+const contaTelefone   = document.getElementById('conta-telefone');
+const contaFoto       = document.getElementById('conta-foto');
+const contaFeedback   = document.getElementById('conta-feedback');
+const btnContaSalvar  = document.getElementById('btn-conta-salvar');
 
 // ─── Elementos: Pluggy ───────────────────────────────────────────────────────────
 const btnImportarBanco  = document.getElementById('btn-importar-banco');
@@ -127,6 +146,11 @@ const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
     if (res.ok) {
       const { user } = await res.json();
       mostrarLobby(user);
+      try {
+        await carregarPerfilConta();
+      } catch (err) {
+        console.warn('Perfil não carregado na inicialização:', err.message);
+      }
     } else {
       removeToken();
       mostrarTelaLogin();
@@ -153,18 +177,71 @@ function mostrarErroLogin(msg) {
 function mostrarLobby(user) {
   if (user) {
     currentUser = user;
-    lobbyUserName.textContent   = user.name;
-    lobbyUserPicture.src        = user.picture || '';
-    lobbyUserPicture.alt        = user.name;
-    // preenche tb elementos do dashboard para não precisar re-buscar depois
-    userNameEl.textContent      = user.name;
-    userPictureEl.src           = user.picture || '';
-    userPictureEl.alt           = user.name;
+    updateDisplayedUserInfo({
+      name: user.name,
+      picture: user.picture,
+    });
   }
   loginScreen.classList.add('hidden');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
   carregarControles();
+}
+
+function updateDisplayedUserInfo({ name, picture }) {
+  const safeName = name || 'Usuário';
+  const safePicture = picture || '';
+
+  lobbyUserName.textContent = safeName;
+  userNameEl.textContent = safeName;
+  lobbyUserPicture.src = safePicture;
+  userPictureEl.src = safePicture;
+  lobbyUserPicture.alt = safeName;
+  userPictureEl.alt = safeName;
+
+  if (currentUser) {
+    currentUser.name = safeName;
+    currentUser.picture = safePicture;
+  }
+}
+
+function setDashboardArea(area) {
+  if (!dashboardAreas[area]) return;
+  currentDashboardArea = area;
+
+  dashboardMenuButtons.forEach((button) => {
+    const isActive = button.dataset.area === area;
+    button.classList.toggle('is-active', isActive);
+  });
+
+  Object.entries(dashboardAreas).forEach(([key, sectionEl]) => {
+    sectionEl.classList.toggle('hidden', key !== area);
+  });
+}
+
+function preencherContaForm(profile) {
+  contaEmail.value = profile.email || '';
+  contaNome.value = profile.displayName || currentUser?.name || '';
+  contaTelefone.value = profile.phone || '';
+  contaFoto.value = profile.pictureUrl || currentUser?.picture || '';
+}
+
+async function carregarPerfilConta() {
+  const res = await fetch(`${API_URL}/auth/profile`, { headers: authHeaders() });
+  if (res.status === 401) {
+    removeToken();
+    mostrarTelaLogin();
+    return;
+  }
+  if (!res.ok) throw new Error('Erro ao carregar dados da conta');
+
+  const { profile } = await res.json();
+  currentProfile = profile;
+  preencherContaForm(profile);
+  updateDisplayedUserInfo({
+    name: profile.displayName || currentUser?.name,
+    picture: profile.pictureUrl || currentUser?.picture,
+  });
 }
 
 function voltarLobby() {
@@ -173,6 +250,8 @@ function voltarLobby() {
   currentControleOwnerEmail = null;
   currentMembers = [];
   currentPluggyItems = [];
+  currentProfile = null;
+  setDashboardArea('resumo');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
   carregarControles();
@@ -247,12 +326,14 @@ async function carregarResponsaveis() {
 // ─── Logout ───────────────────────────────────────────────────────────────────
 btnLobbyLogout.addEventListener('click', async () => {
   await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  currentProfile = null;
   removeToken();
   mostrarTelaLogin();
 });
 
 btnLogout.addEventListener('click', async () => {
   await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  currentProfile = null;
   removeToken();
   mostrarTelaLogin();
 });
@@ -497,9 +578,11 @@ async function abrirControle(id, nome, ownerEmail) {
   controleNomeEl.textContent = nome;
   lobbyScreen.classList.add('hidden');
   appScreen.classList.remove('hidden');
+  setDashboardArea(currentDashboardArea || 'resumo');
   document.getElementById('input-data').valueAsDate = new Date();
   try {
     await carregarResponsaveis();
+    await carregarPerfilConta();
     await carregarGastos();
   } catch (err) {
     console.error(err);
@@ -508,6 +591,12 @@ async function abrirControle(id, nome, ownerEmail) {
 }
 
 btnLobby.addEventListener('click', voltarLobby);
+
+dashboardMenuButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    setDashboardArea(button.dataset.area);
+  });
+});
 
 // ─── Dashboard: dados ────────────────────────────────────────────────────────
 async function carregarGastos() {
@@ -568,6 +657,45 @@ formGasto.addEventListener('submit', async (e) => {
   } finally {
     btnSubmit.disabled = false;
     btnSubmit.textContent = 'Adicionar';
+  }
+});
+
+formConta.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const displayName = contaNome.value.trim();
+  const phone = contaTelefone.value.trim();
+
+  if (!displayName) {
+    mostrarFeedbackEl(contaFeedback, 'error', 'Informe um nome exibido.');
+    return;
+  }
+
+  btnContaSalvar.disabled = true;
+  btnContaSalvar.textContent = 'Salvando...';
+  contaFeedback.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API_URL}/auth/profile`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ displayName, phone }),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao salvar dados da conta');
+
+    currentProfile = data.profile;
+    preencherContaForm(currentProfile);
+    updateDisplayedUserInfo({
+      name: currentProfile.displayName || currentUser?.name,
+      picture: currentProfile.pictureUrl || currentUser?.picture,
+    });
+    mostrarFeedbackEl(contaFeedback, 'success', 'Dados da conta atualizados com sucesso.');
+  } catch (err) {
+    mostrarFeedbackEl(contaFeedback, 'error', err.message);
+  } finally {
+    btnContaSalvar.disabled = false;
+    btnContaSalvar.textContent = 'Salvar alterações';
   }
 });
 

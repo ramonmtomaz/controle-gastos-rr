@@ -4,7 +4,7 @@ const { randomBytes, randomUUID } = require('crypto');
 // ─── Sheets client (service account) ────────────────────────────────────────
 let _sheets = null;
 let _masterSetupDone = false;
-const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems']);
+const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems', 'Usuarios']);
 
 function getServiceSheets() {
   if (_sheets) return _sheets;
@@ -125,6 +125,7 @@ async function setupMasterSheet() {
     { name: 'Membros',   headers: ['controle_id', 'email', 'role', 'joined_at'] },
     { name: 'Codigos',   headers: ['controle_id', 'code', 'expires_at'] },
     { name: 'PluggyItems', headers: ['controle_id', 'member_email', 'item_id', 'connector_name', 'connector_type', 'created_at', 'updated_at'] },
+    { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at'] },
   ];
 
   const newTabs = tabs.filter(t => !existing.includes(t.name));
@@ -285,6 +286,96 @@ async function removePluggyItem(controleId, itemId) {
   await deleteRowInMaster('PluggyItems', index);
 }
 
+// ─── Usuarios (perfil global) ───────────────────────────────────────────────
+function mapUserProfile(row) {
+  return {
+    email: row[0] || '',
+    displayName: row[1] || '',
+    phone: row[2] || '',
+    pictureUrl: row[3] || '',
+    createdAt: row[4] || '',
+    updatedAt: row[5] || '',
+  };
+}
+
+async function getOrCreateUserProfile(email, defaults = {}) {
+  const normalizedEmail = String(email || '').toLowerCase();
+  if (!normalizedEmail) throw new Error('Email do usuário é obrigatório');
+
+  const rows = await readTab('Usuarios');
+  const index = rows.findIndex((row) => (row[0] || '').toLowerCase() === normalizedEmail);
+  if (index !== -1) return mapUserProfile(rows[index]);
+
+  const now = new Date().toISOString();
+  const displayName = String(defaults.displayName || defaults.name || '').trim();
+  const phone = String(defaults.phone || '').trim();
+  const pictureUrl = String(defaults.pictureUrl || defaults.picture || '').trim();
+
+  await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now]);
+  return {
+    email: normalizedEmail,
+    displayName,
+    phone,
+    pictureUrl,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+async function updateUserProfile(email, updates = {}) {
+  const normalizedEmail = String(email || '').toLowerCase();
+  if (!normalizedEmail) throw new Error('Email do usuário é obrigatório');
+
+  const rows = await readTab('Usuarios');
+  const index = rows.findIndex((row) => (row[0] || '').toLowerCase() === normalizedEmail);
+  const now = new Date().toISOString();
+
+  if (index === -1) {
+    const displayName = String(updates.displayName || updates.name || '').trim();
+    const phone = String(updates.phone || '').trim();
+    const pictureUrl = String(updates.pictureUrl || updates.picture || '').trim();
+    await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now]);
+    return {
+      email: normalizedEmail,
+      displayName,
+      phone,
+      pictureUrl,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  const existing = rows[index];
+  const nextDisplayName = updates.displayName !== undefined
+    ? String(updates.displayName || '').trim()
+    : (existing[1] || '');
+  const nextPhone = updates.phone !== undefined
+    ? String(updates.phone || '').trim()
+    : (existing[2] || '');
+  const nextPictureUrl = updates.pictureUrl !== undefined
+    ? String(updates.pictureUrl || '').trim()
+    : (existing[3] || '');
+  const createdAt = existing[4] || now;
+
+  await updateRow('Usuarios', index, [
+    normalizedEmail,
+    nextDisplayName,
+    nextPhone,
+    nextPictureUrl,
+    createdAt,
+    now,
+  ]);
+
+  return {
+    email: normalizedEmail,
+    displayName: nextDisplayName,
+    phone: nextPhone,
+    pictureUrl: nextPictureUrl,
+    createdAt,
+    updatedAt: now,
+  };
+}
+
 // ─── Remoção completa do controle ────────────────────────────────────────────
 async function deleteControle(controleId) {
   const controle = await getControleById(controleId);
@@ -353,6 +444,8 @@ module.exports = {
   listPluggyItems,
   savePluggyItem,
   removePluggyItem,
+  getOrCreateUserProfile,
+  updateUserProfile,
   deleteControle,
   getOrCreateInviteCode,
   joinByCode,
