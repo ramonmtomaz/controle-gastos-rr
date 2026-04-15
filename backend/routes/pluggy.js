@@ -1,9 +1,20 @@
 const express = require('express');
 const router  = express.Router();
+const { PluggyClient } = require('pluggy-sdk');
 const { getControleById, isMembro, getServiceSheets } = require('../services/masterSheet');
 
 const MASTER_ID    = () => process.env.MASTER_SPREADSHEET_ID;
 const PLUGGY_BASE  = 'https://api.pluggy.ai';
+
+function getPluggyClient() {
+  const clientId = process.env.PLUGGY_CLIENT_ID;
+  const clientSecret = process.env.PLUGGY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error('Configure PLUGGY_CLIENT_ID e PLUGGY_CLIENT_SECRET com os valores reais no ambiente');
+  }
+
+  return new PluggyClient({ clientId, clientSecret });
+}
 
 // ─── Helper: requisição para a API Pluggy (fetch nativo Node 18+) ─────────────
 async function pluggyRequest(method, path, body, apiKey) {
@@ -36,16 +47,14 @@ async function getPluggyApiKey() {
 // Gera um connectToken para abrir o Pluggy Connect Widget no frontend.
 router.post('/connect-token', async (req, res) => {
   try {
-    const apiKey    = await getPluggyApiKey();
-    // clientUserId identifica o usuário final no sistema Pluggy (obrigatório para 200)
-    const tokenRes  = await pluggyRequest('POST', '/connect_tokens', { clientUserId: req.user.email }, apiKey);
-    if (tokenRes.status !== 200) {
-      throw new Error(`Erro ao gerar connect token: ${JSON.stringify(tokenRes.body)}`);
-    }
-    res.json({ connectToken: tokenRes.body.accessToken });
+    const pluggy = getPluggyClient();
+    const connectToken = await pluggy.createConnectToken({
+      clientUserId: req.user?.email || `user-${Date.now()}`,
+    });
+    res.json({ connectToken: connectToken.accessToken });
   } catch (err) {
-    console.error('Pluggy connect-token error:', err.message);
-    res.status(500).json({ error: err.message });
+    console.error('Pluggy connect-token error:', err?.response?.data || err.message);
+    res.status(500).json({ error: err?.response?.data?.message || err.message });
   }
 });
 
