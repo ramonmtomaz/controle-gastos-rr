@@ -633,8 +633,13 @@ btnImportarBanco.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Erro ao obter token de conexão');
 
+    const PluggyConnectCtor = window.PluggyConnect;
+    if (!PluggyConnectCtor) {
+      throw new Error('PluggyConnect nao carregou. Recarregue a pagina e tente novamente.');
+    }
+
     // Abre o widget do Pluggy
-    const pluggyConnect = new PluggyConnect({
+    const pluggyConnect = new PluggyConnectCtor({
       connectToken: data.connectToken,
       includeSandbox: true,
       onSuccess: (payload) => {
