@@ -75,6 +75,10 @@ router.post('/import', async (req, res) => {
   if (!itemId || !dataInicio || !dataFim || !responsavel) {
     return res.status(400).json({ error: 'itemId, dataInicio, dataFim e responsavel são obrigatórios' });
   }
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(itemId)) {
+    return res.status(400).json({ error: 'itemId invalido. Conecte novamente no Pluggy.' });
+  }
 
   try {
     const apiKey = await getPluggyApiKey();

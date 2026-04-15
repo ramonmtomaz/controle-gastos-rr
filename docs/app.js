@@ -637,8 +637,15 @@ btnImportarBanco.addEventListener('click', async () => {
     const pluggyConnect = new PluggyConnect({
       connectToken: data.connectToken,
       includeSandbox: true,
-      onSuccess: ({ item }) => {
-        pluggyItemId = item.id;
+      onSuccess: (payload) => {
+        const resolvedItemId = payload?.item?.id || payload?.itemId || payload?.id || null;
+        if (!resolvedItemId) {
+          console.error('Pluggy onSuccess sem itemId:', payload);
+          alert('Nao foi possivel identificar a conta conectada. Tente novamente.');
+          return;
+        }
+
+        pluggyItemId = resolvedItemId;
         // Preenche datas padrão: últimos 30 dias
         const hoje   = new Date();
         const inicio = new Date();
@@ -676,6 +683,10 @@ btnPluggyConfirmar.addEventListener('click', async () => {
   }
   if (new Date(dataInicio) > new Date(dataFim)) {
     mostrarFeedbackEl(pluggyFeedback, 'error', 'A data de início deve ser anterior à data de fim.');
+    return;
+  }
+  if (!pluggyItemId) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', 'Conecte uma conta no Pluggy antes de importar.');
     return;
   }
 
