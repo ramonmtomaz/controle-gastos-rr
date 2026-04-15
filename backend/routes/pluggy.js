@@ -1,7 +1,15 @@
 const express = require('express');
 const router  = express.Router();
 const { PluggyClient } = require('pluggy-sdk');
-const { getControleById, isMembro, getServiceSheets } = require('../services/masterSheet');
+const {
+  getControleById,
+  isMembro,
+  getMembros,
+  getServiceSheets,
+  listPluggyItems,
+  savePluggyItem,
+  removePluggyItem,
+} = require('../services/masterSheet');
 
 const MASTER_ID    = () => process.env.MASTER_SPREADSHEET_ID;
 const PLUGGY_BASE  = 'https://api.pluggy.ai';
@@ -43,6 +51,27 @@ async function getPluggyApiKey() {
   return apiKey;
 }
 
+async function resolveControle(req, res) {
+  const controleId = req.headers['x-controle-id'];
+  if (!controleId) {
+    res.status(400).json({ error: 'Header X-Controle-Id é obrigatório' });
+    return null;
+  }
+
+  const controle = await getControleById(controleId);
+  if (!controle) {
+    res.status(404).json({ error: 'Controle não encontrado' });
+    return null;
+  }
+
+  if (!(await isMembro(controleId, req.user.email))) {
+    res.status(403).json({ error: 'Acesso negado a este controle' });
+    return null;
+  }
+
+  return controle;
+}
+
 // ─── POST /pluggy/connect-token ───────────────────────────────────────────────
 // Gera um connectToken para abrir o Pluggy Connect Widget no frontend.
 router.post('/connect-token', async (req, res) => {
@@ -58,52 +87,155 @@ router.post('/connect-token', async (req, res) => {
   }
 });
 
+// ─── GET /pluggy/items ───────────────────────────────────────────────────────
+router.get('/items', async (req, res) => {
+  try {
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
+
+    const [items, membros] = await Promise.all([
+      listPluggyItems(controle.id),
+      getMembros(controle.id),
+    ]);
+
+    const labels = new Map(membros.map((membro) => [membro.email.toLowerCase(), membro.email.split('@')[0]]));
+    res.json(items.map((item) => ({
+      ...item,
+      memberLabel: labels.get(item.memberEmail.toLowerCase()) || item.memberEmail,
+    })));
+  } catch (err) {
+    console.error('Erro ao listar itens Pluggy:', err);
+    res.status(500).json({ error: 'Erro ao listar bancos vinculados' });
+  }
+});
+
+// ─── POST /pluggy/items ──────────────────────────────────────────────────────
+router.post('/items', async (req, res) => {
+  const { itemId, memberEmail } = req.body;
+  if (!itemId || !memberEmail) {
+    return res.status(400).json({ error: 'itemId e memberEmail são obrigatórios' });
+  }
+
+  try {
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
+
+    if (!(await isMembro(controle.id, memberEmail))) {
+      return res.status(400).json({ error: 'O membro selecionado não faz parte deste controle' });
+    }
+
+    const apiKey = await getPluggyApiKey();
+    const itemRes = await pluggyRequest('GET', `/items/${encodeURIComponent(itemId)}`, null, apiKey);
+    if (itemRes.status !== 200) {
+      throw new Error('Não foi possível carregar os dados do banco conectado');
+    }
+
+    const connectorName = itemRes.body?.connector?.name || itemRes.body?.institution?.name || 'Banco conectado';
+    const connectorType = itemRes.body?.connector?.type || itemRes.body?.type || '';
+
+    await savePluggyItem(controle.id, memberEmail, itemId, connectorName, connectorType);
+
+    res.status(201).json({
+      itemId,
+      memberEmail,
+      memberLabel: memberEmail.split('@')[0],
+      connectorName,
+      connectorType,
+    });
+  } catch (err) {
+    console.error('Erro ao salvar item Pluggy:', err);
+    res.status(500).json({ error: err.message || 'Erro ao vincular banco ao controle' });
+  }
+});
+
+// ─── DELETE /pluggy/items/:itemId ────────────────────────────────────────────
+router.delete('/items/:itemId', async (req, res) => {
+  try {
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
+
+    await removePluggyItem(controle.id, req.params.itemId);
+    res.json({ message: 'Banco desvinculado com sucesso' });
+  } catch (err) {
+    console.error('Erro ao remover item Pluggy:', err);
+    res.status(500).json({ error: err.message || 'Erro ao remover banco vinculado' });
+  }
+});
+
 // ─── POST /pluggy/import ──────────────────────────────────────────────────────
 // Importa transações de débito de um item bancário para o controle atual.
-// Body: { itemId, dataInicio (YYYY-MM-DD), dataFim (YYYY-MM-DD), responsavel }
+// Body: { itemIds, dataInicio (YYYY-MM-DD), dataFim (YYYY-MM-DD) }
 router.post('/import', async (req, res) => {
-  const controleId = req.headers['x-controle-id'];
-  if (!controleId) return res.status(400).json({ error: 'Header X-Controle-Id é obrigatório' });
+  const controle = await resolveControle(req, res);
+  if (!controle) return;
 
-  const controle = await getControleById(controleId);
-  if (!controle) return res.status(404).json({ error: 'Controle não encontrado' });
-  if (!(await isMembro(controleId, req.user.email))) {
-    return res.status(403).json({ error: 'Acesso negado a este controle' });
+  const { itemIds, itemId, dataInicio, dataFim, responsavel } = req.body;
+  if (!dataInicio || !dataFim) {
+    return res.status(400).json({ error: 'dataInicio e dataFim são obrigatórios' });
   }
 
-  const { itemId, dataInicio, dataFim, responsavel } = req.body;
-  if (!itemId || !dataInicio || !dataFim || !responsavel) {
-    return res.status(400).json({ error: 'itemId, dataInicio, dataFim e responsavel são obrigatórios' });
-  }
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(itemId)) {
-    return res.status(400).json({ error: 'itemId invalido. Conecte novamente no Pluggy.' });
+  const selectedIds = Array.isArray(itemIds) && itemIds.length > 0 ? itemIds : [itemId].filter(Boolean);
+  if (selectedIds.some((value) => !uuidRegex.test(value))) {
+    return res.status(400).json({ error: 'Existe um itemId inválido. Conecte novamente no Pluggy.' });
   }
 
   try {
     const apiKey = await getPluggyApiKey();
+    const linkedItems = await listPluggyItems(controle.id);
+    const linkedById = new Map(linkedItems.map((linkedItem) => [linkedItem.itemId, linkedItem]));
+    const importItems = selectedIds
+      .map((selectedId) => linkedById.get(selectedId) || null)
+      .filter(Boolean);
 
-    // Busca contas do item
-    const accountsRes = await pluggyRequest(
-      'GET', `/accounts?itemId=${encodeURIComponent(itemId)}`, null, apiKey
-    );
-    if (accountsRes.status !== 200) throw new Error('Erro ao buscar contas do banco');
+    if (importItems.length === 0 && itemId && responsavel) {
+      importItems.push({
+        itemId,
+        memberEmail: responsavel,
+        connectorName: 'Banco conectado',
+      });
+    }
 
-    const accounts = accountsRes.body.results || [];
-    if (accounts.length === 0) return res.json({ imported: 0, message: 'Nenhuma conta encontrada.' });
+    if (importItems.length === 0) {
+      return res.status(400).json({ error: 'Selecione ao menos um banco vinculado para importar' });
+    }
 
-    // Busca transações de cada conta no período, filtra apenas débitos
     const allTransactions = [];
-    for (const account of accounts) {
-      const txRes = await pluggyRequest(
+    for (const linkedItem of importItems) {
+      const accountsRes = await pluggyRequest(
         'GET',
-        `/transactions?accountId=${encodeURIComponent(account.id)}&from=${dataInicio}&to=${dataFim}&pageSize=500`,
+        `/accounts?itemId=${encodeURIComponent(linkedItem.itemId)}`,
         null,
         apiKey
       );
-      if (txRes.status === 200) {
-        const debits = (txRes.body.results || []).filter((t) => t.type === 'DEBIT');
-        allTransactions.push(...debits);
+      if (accountsRes.status !== 200) {
+        throw new Error('Erro ao buscar contas do banco');
+      }
+
+      const accounts = accountsRes.body.results || [];
+      for (const account of accounts) {
+        const txRes = await pluggyRequest(
+          'GET',
+          `/transactions?accountId=${encodeURIComponent(account.id)}&from=${dataInicio}&to=${dataFim}&pageSize=500`,
+          null,
+          apiKey
+        );
+
+        if (txRes.status !== 200) continue;
+
+        const debits = (txRes.body.results || []).filter((transaction) => {
+          if (transaction.type === 'DEBIT') return true;
+          const numericAmount = Number(transaction.amount || 0);
+          return Number.isFinite(numericAmount) && numericAmount < 0;
+        });
+
+        debits.forEach((transaction) => {
+          allTransactions.push({
+            transaction,
+            linkedItem,
+            account,
+          });
+        });
       }
     }
 
@@ -111,29 +243,30 @@ router.post('/import', async (req, res) => {
       return res.json({ imported: 0, message: 'Nenhuma transação de débito encontrada no período.' });
     }
 
-    // Mapeia para linhas da planilha (colunas: ID, Data, Valor, Categoria, Descrição, Responsável, Tipo, DataRegistro)
     const now  = new Date().toISOString();
-    const rows = allTransactions.map((t, i) => [
-      `${Date.now()}${i}`,
-      t.date ? t.date.split('T')[0] : dataInicio,
-      Math.abs(t.amount).toFixed(2),
+    const rows = allTransactions.map(({ transaction, linkedItem, account }, index) => [
+      `${Date.now()}${index}`,
+      (transaction.date || transaction.paymentDate || dataInicio).split('T')[0],
+      Math.abs(Number(transaction.amount || 0)).toFixed(2),
       'Outros',
-      t.description || '',
-      responsavel,
+      transaction.description || transaction.descriptionRaw || '',
+      linkedItem.memberEmail,
       'Gasto',
       now,
+      linkedItem.connectorName || account.name || 'Banco conectado',
+      linkedItem.itemId,
+      account.id || '',
     ]);
 
-    // Insere em batch na aba do controle
     await getServiceSheets().spreadsheets.values.append({
       spreadsheetId: MASTER_ID(),
-      range: `${controle.spreadsheetId}!A:H`,
+      range: `${controle.spreadsheetId}!A:K`,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values: rows },
     });
 
-    res.json({ imported: rows.length });
+    res.json({ imported: rows.length, itemsProcessados: importItems.length });
   } catch (err) {
     console.error('Pluggy import error:', err.message);
     res.status(500).json({ error: err.message });

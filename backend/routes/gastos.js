@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
 
     const response = await getServiceSheets().spreadsheets.values.get({
       spreadsheetId: MASTER_ID(),
-      range: `${controle.spreadsheetId}!A2:H`,
+      range: `${controle.spreadsheetId}!A2:K`,
     });
 
     const rows = response.data.values || [];
@@ -49,6 +49,9 @@ router.get('/', async (req, res) => {
       responsavel:  row[5] || '',
       tipo:         row[6] || '',
       dataRegistro: row[7] || '',
+      banco:        row[8] || '',
+      pluggyItemId: row[9] || '',
+      contaId:      row[10] || '',
     }));
 
     res.json(gastos);
@@ -80,11 +83,11 @@ router.post('/', async (req, res) => {
 
     await getServiceSheets().spreadsheets.values.append({
       spreadsheetId: MASTER_ID(),
-      range: `${controle.spreadsheetId}!A:H`,
+      range: `${controle.spreadsheetId}!A:K`,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
-        values: [[id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipo, dataRegistro]],
+        values: [[id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipo, dataRegistro, 'Manual', '', '']],
       },
     });
 

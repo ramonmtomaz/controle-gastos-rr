@@ -3,6 +3,8 @@ const { randomBytes, randomUUID } = require('crypto');
 
 // ─── Sheets client (service account) ────────────────────────────────────────
 let _sheets = null;
+let _masterSetupDone = false;
+const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems']);
 
 function getServiceSheets() {
   if (_sheets) return _sheets;
@@ -25,6 +27,10 @@ const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID;
 
 // ─── Helpers internos ────────────────────────────────────────────────────────
 async function readTab(tabName) {
+  if (MASTER_TABS.has(tabName) && !_masterSetupDone) {
+    await setupMasterSheet();
+    _masterSetupDone = true;
+  }
   const res = await getServiceSheets().spreadsheets.values.get({
     spreadsheetId: MASTER_ID(),
     range: `${tabName}!A2:Z`,
@@ -33,6 +39,10 @@ async function readTab(tabName) {
 }
 
 async function appendRow(tabName, row) {
+  if (MASTER_TABS.has(tabName) && !_masterSetupDone) {
+    await setupMasterSheet();
+    _masterSetupDone = true;
+  }
   await getServiceSheets().spreadsheets.values.append({
     spreadsheetId: MASTER_ID(),
     range: `${tabName}!A:Z`,
@@ -43,6 +53,10 @@ async function appendRow(tabName, row) {
 }
 
 async function updateRow(tabName, rowIndex, row) {
+  if (MASTER_TABS.has(tabName) && !_masterSetupDone) {
+    await setupMasterSheet();
+    _masterSetupDone = true;
+  }
   // rowIndex é 0-based a partir de A2; linha real na planilha = rowIndex + 2
   const sheetRow = rowIndex + 2;
   await getServiceSheets().spreadsheets.values.update({
@@ -54,6 +68,10 @@ async function updateRow(tabName, rowIndex, row) {
 }
 
 async function deleteRowInMaster(tabName, rowIndex) {
+  if (MASTER_TABS.has(tabName) && !_masterSetupDone) {
+    await setupMasterSheet();
+    _masterSetupDone = true;
+  }
   // rowIndex 0-based a partir de A2 → startIndex = rowIndex + 1 (0-based na API)
   const spreadsheet = await getServiceSheets().spreadsheets.get({ spreadsheetId: MASTER_ID() });
   const sheet = spreadsheet.data.sheets.find(s => s.properties.title === tabName);
@@ -75,6 +93,28 @@ async function deleteRowInMaster(tabName, rowIndex) {
   });
 }
 
+async function deleteRowsWhere(tabName, predicate) {
+  const rows = await readTab(tabName);
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (predicate(rows[index])) {
+      await deleteRowInMaster(tabName, index);
+    }
+  }
+}
+
+async function deleteSheetByTitle(tabName) {
+  const spreadsheet = await getServiceSheets().spreadsheets.get({ spreadsheetId: MASTER_ID() });
+  const sheet = spreadsheet.data.sheets.find((item) => item.properties.title === tabName);
+  if (!sheet) return;
+
+  await getServiceSheets().spreadsheets.batchUpdate({
+    spreadsheetId: MASTER_ID(),
+    requestBody: {
+      requests: [{ deleteSheet: { sheetId: sheet.properties.sheetId } }],
+    },
+  });
+}
+
 // ─── Setup ───────────────────────────────────────────────────────────────────
 async function setupMasterSheet() {
   const spreadsheet = await getServiceSheets().spreadsheets.get({ spreadsheetId: MASTER_ID() });
@@ -84,6 +124,7 @@ async function setupMasterSheet() {
     { name: 'Controles', headers: ['id', 'nome', 'owner_email', 'spreadsheet_id', 'created_at'] },
     { name: 'Membros',   headers: ['controle_id', 'email', 'role', 'joined_at'] },
     { name: 'Codigos',   headers: ['controle_id', 'code', 'expires_at'] },
+    { name: 'PluggyItems', headers: ['controle_id', 'member_email', 'item_id', 'connector_name', 'connector_type', 'created_at', 'updated_at'] },
   ];
 
   const newTabs = tabs.filter(t => !existing.includes(t.name));
@@ -103,6 +144,8 @@ async function setupMasterSheet() {
       requestBody: { values: [tab.headers] },
     });
   }
+
+  _masterSetupDone = true;
 }
 
 // ─── Controles ───────────────────────────────────────────────────────────────
@@ -140,10 +183,10 @@ async function createControle(nome, ownerEmail) {
   // Adiciona cabeçalho na nova aba
   await getServiceSheets().spreadsheets.values.update({
     spreadsheetId: MASTER_ID(),
-    range: `${tabName}!A1:H1`,
+    range: `${tabName}!A1:K1`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [['ID', 'Data', 'Valor', 'Categoria', 'Descrição', 'Responsável', 'Tipo', 'DataRegistro']],
+      values: [['ID', 'Data', 'Valor', 'Categoria', 'Descrição', 'Responsável', 'Tipo', 'DataRegistro', 'Banco', 'PluggyItemId', 'ContaId']],
     },
   });
 
@@ -168,6 +211,15 @@ async function getMembros(controleId) {
     .map(r => ({ controleId: r[0], email: r[1], role: r[2], joinedAt: r[3] }));
 }
 
+async function getResponsavelOptions(controleId) {
+  const membros = await getMembros(controleId);
+  return membros.map((membro) => ({
+    email: membro.email,
+    label: membro.email.split('@')[0],
+    role: membro.role,
+  }));
+}
+
 async function isMembro(controleId, email) {
   const membros = await getMembros(controleId);
   return membros.some(m => m.email.toLowerCase() === email.toLowerCase());
@@ -178,6 +230,71 @@ async function removeMembro(controleId, email) {
   const idx  = rows.findIndex(r => r[0] === controleId && r[1]?.toLowerCase() === email.toLowerCase());
   if (idx === -1) throw new Error('Membro não encontrado');
   await deleteRowInMaster('Membros', idx);
+}
+
+// ─── Pluggy items ────────────────────────────────────────────────────────────
+async function listPluggyItems(controleId) {
+  const rows = await readTab('PluggyItems');
+  return rows
+    .filter((row) => row[0] === controleId)
+    .map((row) => ({
+      controleId: row[0],
+      memberEmail: row[1] || '',
+      itemId: row[2] || '',
+      connectorName: row[3] || '',
+      connectorType: row[4] || '',
+      createdAt: row[5] || '',
+      updatedAt: row[6] || '',
+    }));
+}
+
+async function savePluggyItem(controleId, memberEmail, itemId, connectorName, connectorType) {
+  const rows = await readTab('PluggyItems');
+  const existingIndex = rows.findIndex((row) => row[0] === controleId && row[2] === itemId);
+  const now = new Date().toISOString();
+
+  if (existingIndex !== -1) {
+    const createdAt = rows[existingIndex][5] || now;
+    await updateRow('PluggyItems', existingIndex, [
+      controleId,
+      memberEmail,
+      itemId,
+      connectorName || '',
+      connectorType || '',
+      createdAt,
+      now,
+    ]);
+    return;
+  }
+
+  await appendRow('PluggyItems', [
+    controleId,
+    memberEmail,
+    itemId,
+    connectorName || '',
+    connectorType || '',
+    now,
+    now,
+  ]);
+}
+
+async function removePluggyItem(controleId, itemId) {
+  const rows = await readTab('PluggyItems');
+  const index = rows.findIndex((row) => row[0] === controleId && row[2] === itemId);
+  if (index === -1) throw new Error('Item Pluggy não encontrado');
+  await deleteRowInMaster('PluggyItems', index);
+}
+
+// ─── Remoção completa do controle ────────────────────────────────────────────
+async function deleteControle(controleId) {
+  const controle = await getControleById(controleId);
+  if (!controle) throw new Error('Controle não encontrado');
+
+  await deleteRowsWhere('Membros', (row) => row[0] === controleId);
+  await deleteRowsWhere('Codigos', (row) => row[0] === controleId);
+  await deleteRowsWhere('PluggyItems', (row) => row[0] === controleId);
+  await deleteRowsWhere('Controles', (row) => row[0] === controleId);
+  await deleteSheetByTitle(controle.spreadsheetId);
 }
 
 // ─── Convites ─────────────────────────────────────────────────────────────────
@@ -230,8 +347,13 @@ module.exports = {
   getControleById,
   createControle,
   getMembros,
+  getResponsavelOptions,
   isMembro,
   removeMembro,
+  listPluggyItems,
+  savePluggyItem,
+  removePluggyItem,
+  deleteControle,
   getOrCreateInviteCode,
   joinByCode,
 };

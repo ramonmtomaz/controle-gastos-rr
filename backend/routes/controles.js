@@ -85,6 +85,21 @@ router.get('/:id/members', async (req, res) => {
   }
 });
 
+// ─── GET /controles/:id/responsaveis — opções dinâmicas de responsável ───────
+router.get('/:id/responsaveis', async (req, res) => {
+  const { id } = req.params;
+  try {
+    if (!(await master.isMembro(id, req.user.email))) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+    const responsaveis = await master.getResponsavelOptions(id);
+    res.json(responsaveis);
+  } catch (err) {
+    console.error('Erro ao buscar responsáveis:', err);
+    res.status(500).json({ error: 'Erro ao buscar responsáveis do controle' });
+  }
+});
+
 // ─── DELETE /controles/:id/leave — sair do controle ──────────────────────────
 router.delete('/:id/leave', async (req, res) => {
   const { id } = req.params;
@@ -119,6 +134,24 @@ router.delete('/:id/members/:email', async (req, res) => {
   } catch (err) {
     console.error('Erro ao remover membro:', err);
     res.status(500).json({ error: 'Erro ao remover membro' });
+  }
+});
+
+// ─── DELETE /controles/:id — deletar controle inteiro (só owner) ────────────
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const controle = await master.getControleById(id);
+    if (!controle) return res.status(404).json({ error: 'Controle não encontrado' });
+    if (controle.ownerEmail.toLowerCase() !== req.user.email.toLowerCase()) {
+      return res.status(403).json({ error: 'Apenas o dono pode excluir o controle' });
+    }
+
+    await master.deleteControle(id);
+    res.json({ message: 'Controle excluído com sucesso' });
+  } catch (err) {
+    console.error('Erro ao excluir controle:', err);
+    res.status(500).json({ error: err.message || 'Erro ao excluir controle' });
   }
 });
 

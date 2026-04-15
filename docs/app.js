@@ -19,9 +19,11 @@ function controleHeaders() {
 // ─── Estado ───────────────────────────────────────────────────────────────────
 let gastos           = [];
 let deleteTargetId   = null;
-let pluggyItemId     = null;
+let currentMembers      = [];
+let currentPluggyItems  = [];
 let currentControleId   = null;
 let currentControleNome = null;
+let currentControleOwnerEmail = null;
 let currentUser         = null; // { email, name, picture }
 
 // ─── Elementos: comuns ────────────────────────────────────────────────────────
@@ -76,6 +78,7 @@ const emptyStateEl   = document.getElementById('empty-state');
 const filterSearch   = document.getElementById('filter-search');
 const filterTipo     = document.getElementById('filter-tipo');
 const filterResp     = document.getElementById('filter-responsavel');
+const filterBanco    = document.getElementById('filter-banco');
 const modalConfirm   = document.getElementById('modal-confirm');
 const modalCancel    = document.getElementById('modal-cancel');
 const modalConfirmBtn = document.getElementById('modal-confirm-btn');
@@ -86,7 +89,10 @@ const modalPluggy       = document.getElementById('modal-pluggy');
 const pluggyDataInicio  = document.getElementById('pluggy-data-inicio');
 const pluggyDataFim     = document.getElementById('pluggy-data-fim');
 const pluggyResponsavel = document.getElementById('pluggy-responsavel');
+const pluggyItemsList   = document.getElementById('pluggy-items-list');
+const pluggyItemsCount  = document.getElementById('pluggy-items-count');
 const pluggyFeedback    = document.getElementById('pluggy-feedback');
+const btnPluggyConectar = document.getElementById('btn-pluggy-conectar');
 const btnPluggyCancelar  = document.getElementById('btn-pluggy-cancelar');
 const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
 
@@ -164,9 +170,78 @@ function mostrarLobby(user) {
 function voltarLobby() {
   currentControleId   = null;
   currentControleNome = null;
+  currentControleOwnerEmail = null;
+  currentMembers = [];
+  currentPluggyItems = [];
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
   carregarControles();
+}
+
+function getMemberLabel(email) {
+  if (!email) return '';
+  const normalized = String(email).toLowerCase();
+  const member = currentMembers.find((item) => item.email.toLowerCase() === normalized);
+  if (member) return member.label;
+  return String(email).includes('@') ? String(email).split('@')[0] : String(email);
+}
+
+function setSelectOptions(selectEl, options, emptyLabel) {
+  const previousValue = selectEl.value;
+  selectEl.innerHTML = '';
+
+  const emptyOption = document.createElement('option');
+  emptyOption.value = '';
+  emptyOption.textContent = emptyLabel;
+  selectEl.appendChild(emptyOption);
+
+  options.forEach((option) => {
+    const el = document.createElement('option');
+    el.value = option.value;
+    el.textContent = option.label;
+    selectEl.appendChild(el);
+  });
+
+  if (options.some((option) => option.value === previousValue)) {
+    selectEl.value = previousValue;
+  }
+}
+
+function atualizarFiltroBancos() {
+  const previousValue = filterBanco.value;
+  const bancos = Array.from(new Set(
+    gastos.map((gasto) => gasto.banco || 'Manual').filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  filterBanco.innerHTML = '<option value="">Todos os bancos</option>';
+  bancos.forEach((banco) => {
+    const option = document.createElement('option');
+    option.value = banco;
+    option.textContent = banco;
+    filterBanco.appendChild(option);
+  });
+
+  if (bancos.includes(previousValue)) {
+    filterBanco.value = previousValue;
+  }
+}
+
+async function carregarResponsaveis() {
+  if (!currentControleId) return;
+
+  const res = await fetch(`${API_URL}/controles/${currentControleId}/responsaveis`, { headers: authHeaders() });
+  if (res.status === 401) {
+    removeToken();
+    mostrarTelaLogin();
+    return;
+  }
+  if (!res.ok) throw new Error('Erro ao carregar responsáveis');
+
+  currentMembers = await res.json();
+  const options = currentMembers.map((member) => ({ value: member.email, label: member.label }));
+  setSelectOptions(document.getElementById('input-responsavel'), options, 'Selecione...');
+  setSelectOptions(filterResp, options, 'Todos');
+  setSelectOptions(pluggyResponsavel, options, 'Selecione...');
 }
 
 // ─── Logout ───────────────────────────────────────────────────────────────────
@@ -216,6 +291,7 @@ async function carregarControles() {
           <button class="btn btn-outline btn-sm btn-ver-membros"
             data-id="${escapeHtml(c.id)}"
             data-nome="${escapeHtml(c.nome)}">👥 Membros</button>
+          ${isOwner ? `<button class="btn btn-danger btn-sm btn-excluir-controle" data-id="${escapeHtml(c.id)}" data-nome="${escapeHtml(c.nome)}">Excluir</button>` : ''}
           ${!isOwner ? `<button class="btn btn-outline btn-sm btn-sair" data-id="${escapeHtml(c.id)}">Sair</button>` : ''}
         </div>
       `;
@@ -230,6 +306,9 @@ async function carregarControles() {
     );
     lobbyControles.querySelectorAll('.btn-sair').forEach(btn =>
       btn.addEventListener('click', () => sairDoControle(btn.dataset.id))
+    );
+    lobbyControles.querySelectorAll('.btn-excluir-controle').forEach(btn =>
+      btn.addEventListener('click', () => excluirControle(btn.dataset.id, btn.dataset.nome))
     );
   } catch {
     lobbyControles.innerHTML = '<p class="lobby-loading" style="color:var(--danger)">Erro ao carregar controles.</p>';
@@ -391,15 +470,41 @@ async function sairDoControle(controleId) {
   }
 }
 
+async function excluirControle(controleId, nome) {
+  if (!confirm(`Excluir permanentemente o controle "${nome}"?`)) return;
+
+  try {
+    const res = await fetch(`${API_URL}/controles/${controleId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Erro ao excluir controle.');
+      return;
+    }
+    carregarControles();
+  } catch {
+    alert('Erro de conexão.');
+  }
+}
+
 // ─── Dashboard: abrir controle ────────────────────────────────────────────────
-function abrirControle(id, nome) {
+async function abrirControle(id, nome, ownerEmail) {
   currentControleId   = id;
   currentControleNome = nome;
+  currentControleOwnerEmail = ownerEmail || null;
   controleNomeEl.textContent = nome;
   lobbyScreen.classList.add('hidden');
   appScreen.classList.remove('hidden');
   document.getElementById('input-data').valueAsDate = new Date();
-  carregarGastos();
+  try {
+    await carregarResponsaveis();
+    await carregarGastos();
+  } catch (err) {
+    console.error(err);
+    mostrarFeedback('error', 'Não foi possível carregar os membros deste controle.');
+  }
 }
 
 btnLobby.addEventListener('click', voltarLobby);
@@ -415,6 +520,7 @@ async function carregarGastos() {
     if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
     if (!res.ok) throw new Error('Erro ao buscar dados');
     gastos = await res.json();
+    atualizarFiltroBancos();
     renderizarTabela();
     atualizarResumo();
   } catch (err) {
@@ -478,21 +584,24 @@ function gastosFiltrados() {
   const busca = filterSearch.value.toLowerCase();
   const tipo  = filterTipo.value;
   const resp  = filterResp.value;
+  const banco = filterBanco.value;
   return gastos.filter((g) => {
     if (tipo && g.tipo !== tipo) return false;
     if (resp && g.responsavel !== resp) return false;
+    if (banco && (g.banco || 'Manual') !== banco) return false;
     if (busca) {
       return (
-        g.descricao.toLowerCase().includes(busca) ||
-        g.categoria.toLowerCase().includes(busca) ||
-        g.responsavel.toLowerCase().includes(busca)
+        (g.descricao || '').toLowerCase().includes(busca) ||
+        (g.categoria || '').toLowerCase().includes(busca) ||
+        getMemberLabel(g.responsavel).toLowerCase().includes(busca) ||
+        (g.banco || 'Manual').toLowerCase().includes(busca)
       );
     }
     return true;
   });
 }
 
-[filterSearch, filterTipo, filterResp].forEach((el) =>
+[filterSearch, filterTipo, filterResp, filterBanco].forEach((el) =>
   el.addEventListener('input', () => { renderizarTabela(); atualizarResumo(); })
 );
 
@@ -510,13 +619,16 @@ function renderizarTabela() {
   lista.sort((a, b) => new Date(b.data) - new Date(a.data));
 
   lista.forEach((g) => {
+    const responsavelLabel = getMemberLabel(g.responsavel);
+    const bancoLabel = g.banco || 'Manual';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="Data">${formatarData(g.data)}</td>
       <td data-label="Tipo"><span class="tag tag-${g.tipo.toLowerCase()}">${escapeHtml(g.tipo)}</span></td>
       <td data-label="Categoria">${escapeHtml(g.categoria)}</td>
       <td data-label="Descrição">${escapeHtml(g.descricao) || '—'}</td>
-      <td data-label="Responsável"><span class="tag tag-${g.responsavel.toLowerCase()}">${escapeHtml(g.responsavel)}</span></td>
+      <td data-label="Banco"><span class="tag tag-bank">${escapeHtml(bancoLabel)}</span></td>
+      <td data-label="Responsável"><span class="tag tag-member">${escapeHtml(responsavelLabel)}</span></td>
       <td data-label="Valor" class="text-right ${g.tipo === 'Gasto' ? 'valor-gasto' : 'valor-investimento'}">
         ${formatarValor(g.valor)}
       </td>
@@ -612,21 +724,105 @@ function formatarData(iso) {
 }
 
 // ─── Pluggy: Importação bancária ──────────────────────────────────────────────────
-function fecharModalPluggy() {
-  modalPluggy.classList.add('hidden');
-  pluggyItemId = null;
-  pluggyFeedback.classList.add('hidden');
-  pluggyResponsavel.value = '';
+function getSelectedPluggyItemIds() {
+  return Array.from(pluggyItemsList.querySelectorAll('.pluggy-item-checkbox:checked'))
+    .map((input) => input.value);
 }
 
-btnPluggyCancelar.addEventListener('click', fecharModalPluggy);
-modalPluggy.querySelector('.modal-overlay').addEventListener('click', fecharModalPluggy);
+function fecharModalPluggy() {
+  modalPluggy.classList.add('hidden');
+  pluggyFeedback.classList.add('hidden');
+  pluggyItemsList.innerHTML = '';
+  pluggyItemsCount.textContent = '0 banco';
+}
 
-btnImportarBanco.addEventListener('click', async () => {
-  btnImportarBanco.disabled = true;
-  btnImportarBanco.textContent = 'Conectando...';
+function renderPluggyItems() {
+  pluggyItemsList.innerHTML = '';
+  pluggyItemsCount.textContent = `${currentPluggyItems.length} ${currentPluggyItems.length === 1 ? 'banco' : 'bancos'}`;
+
+  if (currentPluggyItems.length === 0) {
+    pluggyItemsList.innerHTML = '<p class="pluggy-empty">Nenhum banco vinculado ainda.</p>';
+    return;
+  }
+
+  currentPluggyItems.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'pluggy-item';
+    row.innerHTML = `
+      <div class="pluggy-item-main">
+        <input type="checkbox" class="pluggy-item-checkbox" value="${escapeHtml(item.itemId)}" />
+        <div class="pluggy-item-text">
+          <span class="pluggy-item-title">${escapeHtml(item.connectorName || 'Banco conectado')}</span>
+          <span class="pluggy-item-subtitle">Vinculado a ${escapeHtml(getMemberLabel(item.memberEmail))}</span>
+        </div>
+      </div>
+      <div class="pluggy-item-actions">
+        <button class="btn btn-outline btn-sm btn-remover-pluggy" data-item-id="${escapeHtml(item.itemId)}">Remover</button>
+      </div>
+    `;
+    pluggyItemsList.appendChild(row);
+  });
+
+  pluggyItemsList.querySelectorAll('.btn-remover-pluggy').forEach((button) => {
+    button.addEventListener('click', () => removerPluggyItem(button.dataset.itemId));
+  });
+}
+
+async function carregarPluggyItems() {
+  const res = await fetch(`${API_URL}/pluggy/items`, { headers: controleHeaders() });
+  if (res.status === 401) {
+    removeToken();
+    mostrarTelaLogin();
+    return;
+  }
+  if (!res.ok) throw new Error('Erro ao carregar bancos vinculados');
+  currentPluggyItems = await res.json();
+  renderPluggyItems();
+}
+
+async function abrirModalPluggy() {
+  pluggyFeedback.classList.add('hidden');
+
+  const hoje = new Date();
+  const inicio = new Date();
+  inicio.setDate(inicio.getDate() - 30);
+  pluggyDataFim.value = hoje.toISOString().split('T')[0];
+  pluggyDataInicio.value = inicio.toISOString().split('T')[0];
+
+  await carregarPluggyItems();
+  modalPluggy.classList.remove('hidden');
+}
+
+async function removerPluggyItem(itemId) {
+  if (!confirm('Remover este banco vinculado?')) return;
+
   try {
-    const res  = await fetch(`${API_URL}/pluggy/connect-token`, {
+    const res = await fetch(`${API_URL}/pluggy/items/${encodeURIComponent(itemId)}`, {
+      method: 'DELETE',
+      headers: controleHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao remover banco');
+
+    await carregarPluggyItems();
+  } catch (err) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', err.message);
+  }
+}
+
+async function conectarBancoPluggy() {
+  const memberEmail = pluggyResponsavel.value;
+  if (!memberEmail) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', 'Selecione o membro que será vinculado ao banco.');
+    return;
+  }
+
+  btnPluggyConectar.disabled = true;
+  btnPluggyConectar.textContent = 'Conectando...';
+  pluggyFeedback.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API_URL}/pluggy/connect-token`, {
       method: 'POST',
       headers: controleHeaders(),
     });
@@ -638,33 +834,55 @@ btnImportarBanco.addEventListener('click', async () => {
       throw new Error('PluggyConnect nao carregou. Recarregue a pagina e tente novamente.');
     }
 
-    // Abre o widget do Pluggy
     const pluggyConnect = new PluggyConnectCtor({
       connectToken: data.connectToken,
       includeSandbox: true,
-      onSuccess: (payload) => {
+      onSuccess: async (payload) => {
         const resolvedItemId = payload?.item?.id || payload?.itemId || payload?.id || null;
         if (!resolvedItemId) {
-          console.error('Pluggy onSuccess sem itemId:', payload);
-          alert('Nao foi possivel identificar a conta conectada. Tente novamente.');
+          mostrarFeedbackEl(pluggyFeedback, 'error', 'Nao foi possivel identificar a conta conectada.');
           return;
         }
 
-        pluggyItemId = resolvedItemId;
-        // Preenche datas padrão: últimos 30 dias
-        const hoje   = new Date();
-        const inicio = new Date();
-        inicio.setDate(inicio.getDate() - 30);
-        pluggyDataFim.value   = hoje.toISOString().split('T')[0];
-        pluggyDataInicio.value = inicio.toISOString().split('T')[0];
-        modalPluggy.classList.remove('hidden');
+        try {
+          const saveRes = await fetch(`${API_URL}/pluggy/items`, {
+            method: 'POST',
+            headers: controleHeaders(),
+            body: JSON.stringify({ itemId: resolvedItemId, memberEmail }),
+          });
+          const saveData = await saveRes.json();
+          if (!saveRes.ok) throw new Error(saveData.error || 'Erro ao vincular banco ao controle');
+
+          await carregarPluggyItems();
+          mostrarFeedbackEl(pluggyFeedback, 'success', `${saveData.connectorName} vinculado a ${getMemberLabel(memberEmail)}.`);
+        } catch (err) {
+          mostrarFeedbackEl(pluggyFeedback, 'error', err.message);
+        }
       },
       onError: (err) => {
         console.error('Pluggy widget error:', err);
-        alert('Erro ao conectar ao banco. Tente novamente.');
+        mostrarFeedbackEl(pluggyFeedback, 'error', 'Erro ao conectar ao banco. Tente novamente.');
       },
     });
+
     pluggyConnect.init();
+  } catch (err) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', err.message);
+  } finally {
+    btnPluggyConectar.disabled = false;
+    btnPluggyConectar.textContent = '+ Conectar banco';
+  }
+}
+
+btnPluggyCancelar.addEventListener('click', fecharModalPluggy);
+modalPluggy.querySelector('.modal-overlay').addEventListener('click', fecharModalPluggy);
+btnPluggyConectar.addEventListener('click', conectarBancoPluggy);
+
+btnImportarBanco.addEventListener('click', async () => {
+  try {
+    btnImportarBanco.disabled = true;
+    btnImportarBanco.textContent = 'Carregando...';
+    await abrirModalPluggy();
   } catch (err) {
     alert(err.message);
   } finally {
@@ -676,22 +894,18 @@ btnImportarBanco.addEventListener('click', async () => {
 btnPluggyConfirmar.addEventListener('click', async () => {
   const dataInicio  = pluggyDataInicio.value;
   const dataFim     = pluggyDataFim.value;
-  const responsavel = pluggyResponsavel.value;
+  const itemIds = getSelectedPluggyItemIds();
 
   if (!dataInicio || !dataFim) {
     mostrarFeedbackEl(pluggyFeedback, 'error', 'Preencha as datas.');
-    return;
-  }
-  if (!responsavel) {
-    mostrarFeedbackEl(pluggyFeedback, 'error', 'Selecione o responsável.');
     return;
   }
   if (new Date(dataInicio) > new Date(dataFim)) {
     mostrarFeedbackEl(pluggyFeedback, 'error', 'A data de início deve ser anterior à data de fim.');
     return;
   }
-  if (!pluggyItemId) {
-    mostrarFeedbackEl(pluggyFeedback, 'error', 'Conecte uma conta no Pluggy antes de importar.');
+  if (itemIds.length === 0) {
+    mostrarFeedbackEl(pluggyFeedback, 'error', 'Selecione ao menos um banco para importar.');
     return;
   }
 
@@ -703,7 +917,7 @@ btnPluggyConfirmar.addEventListener('click', async () => {
     const res  = await fetch(`${API_URL}/pluggy/import`, {
       method: 'POST',
       headers: controleHeaders(),
-      body: JSON.stringify({ itemId: pluggyItemId, dataInicio, dataFim, responsavel }),
+      body: JSON.stringify({ itemIds, dataInicio, dataFim }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Erro ao importar');

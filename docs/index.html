@@ -164,9 +164,9 @@
             </select>
             <select id="filter-responsavel" class="filter-input">
               <option value="">Todos</option>
-              <option value="Eu">Eu</option>
-              <option value="Esposa">Esposa</option>
-              <option value="Casal">Casal</option>
+            </select>
+            <select id="filter-banco" class="filter-input">
+              <option value="">Todos os bancos</option>
             </select>
             <button id="btn-refresh" class="btn btn-outline btn-sm" title="Atualizar">↻ Atualizar</button>
             <button id="btn-importar-banco" class="btn btn-outline btn-sm">🏦 Importar do banco</button>
@@ -184,6 +184,7 @@
                 <th>Tipo</th>
                 <th>Categoria</th>
                 <th>Descrição</th>
+                <th>Banco</th>
                 <th>Responsável</th>
                 <th class="text-right">Valor</th>
                 <th class="text-center">Ação</th>
@@ -257,9 +258,9 @@
   <!-- Modal: Importar do banco (Pluggy) -->
   <div id="modal-pluggy" class="modal hidden">
     <div class="modal-overlay"></div>
-    <div class="modal-box">
+    <div class="modal-box modal-box-wide">
       <h3>🏦 Importar do banco</h3>
-      <p>Escolha o período e o responsável pelas transações importadas.</p>
+      <p>Selecione os bancos vinculados, o período e importe tudo de uma vez.</p>
       <div class="form-grid" style="margin-bottom:16px">
         <div class="form-group">
           <label for="pluggy-data-inicio">Data de início *</label>
@@ -269,14 +270,26 @@
           <label for="pluggy-data-fim">Data de fim *</label>
           <input type="date" id="pluggy-data-fim" />
         </div>
-        <div class="form-group form-group-full">
-          <label for="pluggy-responsavel">Responsável *</label>
-          <select id="pluggy-responsavel">
-            <option value="">Selecione...</option>
-            <option value="Eu">Eu</option>
-            <option value="Esposa">Esposa</option>
-            <option value="Casal">Casal</option>
-          </select>
+      </div>
+      <div class="pluggy-section">
+        <div class="pluggy-section-header">
+          <h4>Bancos vinculados</h4>
+          <span id="pluggy-items-count" class="pluggy-section-meta">0 banco</span>
+        </div>
+        <div id="pluggy-items-list" class="pluggy-items-list"></div>
+      </div>
+      <div class="pluggy-section">
+        <div class="pluggy-section-header">
+          <h4>Conectar novo banco</h4>
+        </div>
+        <div class="pluggy-connect-row">
+          <div class="form-group pluggy-connect-member">
+            <label for="pluggy-responsavel">Vincular a *</label>
+            <select id="pluggy-responsavel">
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <button id="btn-pluggy-conectar" class="btn btn-outline">+ Conectar banco</button>
         </div>
       </div>
       <div id="pluggy-feedback" class="feedback hidden"></div>
