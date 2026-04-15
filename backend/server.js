@@ -6,6 +6,7 @@ const authRoutes     = require('./routes/auth');
 const gastosRoutes   = require('./routes/gastos');
 const controlesRoutes = require('./routes/controles');
 const pluggyRoutes   = require('./routes/pluggy');
+const pluggyWebhookRoutes = require('./routes/pluggyWebhook');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use(express.json());
 
 // ─── Rotas públicas (auth) ────────────────────────────────────────────────────
 app.use('/auth', authRoutes);
+app.use('/webhooks/pluggy', pluggyWebhookRoutes);
 
 // ─── Rotas protegidas ────────────────────────────────────────────────────────
 app.use('/controles', requireAuth, controlesRoutes);
