@@ -127,6 +127,7 @@ const estatCategoriasLista = document.getElementById('estat-categorias-lista');
 
 // ─── Elementos: Pluggy ───────────────────────────────────────────────────────────
 const btnImportarBanco  = document.getElementById('btn-importar-banco');
+const btnSyncCartoesPluggy = document.getElementById('btn-sync-cartoes-pluggy');
 const modalPluggy       = document.getElementById('modal-pluggy');
 const pluggyDataInicio  = document.getElementById('pluggy-data-inicio');
 const pluggyDataFim     = document.getElementById('pluggy-data-fim');
@@ -653,6 +654,7 @@ async function abrirControle(id, nome, ownerEmail) {
     await carregarPerfilConta();
     await carregarRendasExtras();
     await carregarCartoes();
+    await sincronizarCartoesPluggy(false);
     await carregarComprasParceladas();
     await carregarGastos();
     await carregarRendaGeralControle();
@@ -1264,6 +1266,14 @@ function mostrarFeedbackEl(el, tipo, msg) {
   el.classList.remove('hidden');
 }
 
+async function safeReadResponseJson(res) {
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
 function formatarValor(v) {
   return parseFloat(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
@@ -1387,29 +1397,65 @@ function renderCartoes() {
           <span class="cartao-banco">${escapeHtml(c.bancoNome)}</span>
         </div>
         <div class="cartao-meta-row">
+          <span class="tag ${String(c.origemCartao || 'manual') === 'pluggy' ? 'tag-pluggy' : 'tag-manual'}">${String(c.origemCartao || 'manual') === 'pluggy' ? 'Pluggy' : 'Manual'}</span>
           <span class="cartao-tipo tag">${escapeHtml(c.tipoCartao)}</span>
           ${c.bandeira ? `<span class="cartao-bandeira tag">${escapeHtml(c.bandeira)}</span>` : ''}
           <span class="tag tag-bank">Fecha dia ${escapeHtml(c.diaFechamentoFatura || '1')}</span>
           ${c.diaVencimentoFatura ? `<span class="tag tag-member">Vence dia ${escapeHtml(c.diaVencimentoFatura)}</span>` : ''}
         </div>
       </div>
-      <button class="btn btn-danger btn-sm btn-remover-cartao" data-id="${escapeHtml(c.id)}">Remover</button>
+      <div class="cartao-actions">
+        ${String(c.origemCartao || 'manual') === 'pluggy' ? `<button class="btn btn-outline btn-sm btn-apelido-cartao" data-id="${escapeHtml(c.id)}" data-nome="${escapeHtml(c.cartaoNome || '')}">Apelido</button>` : ''}
+        <button class="btn btn-danger btn-sm btn-remover-cartao" data-id="${escapeHtml(c.id)}">Remover</button>
+      </div>
     </article>
   `).join('');
+
+  lista.querySelectorAll('.btn-apelido-cartao').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const atual = btn.dataset.nome || '';
+      const apelido = prompt('Defina um apelido para o cartão Pluggy:', atual);
+      if (apelido === null) return;
+      const nome = String(apelido).trim();
+      if (!nome) {
+        alert('Informe um apelido válido.');
+        return;
+      }
+
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}/cartoes/${encodeURIComponent(btn.dataset.id)}`, {
+          method: 'PATCH',
+          headers: authHeaders(),
+          body: JSON.stringify({ apelido: nome }),
+        });
+        const data = await safeReadResponseJson(res);
+        if (!res.ok) throw new Error(data.error || 'Erro ao atualizar apelido do cartão');
+        await carregarCartoes();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 
   lista.querySelectorAll('.btn-remover-cartao').forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (!confirm('Inativar este cartão?')) return;
+      btn.disabled = true;
       try {
         const res = await fetch(`${API_URL}/cartoes/${encodeURIComponent(btn.dataset.id)}`, {
           method: 'DELETE',
           headers: authHeaders(),
         });
-        const data = await res.json();
+        const data = await safeReadResponseJson(res);
         if (!res.ok) throw new Error(data.error || 'Erro ao remover cartão');
         await carregarCartoes();
       } catch (err) {
         alert(err.message);
+      } finally {
+        btn.disabled = false;
       }
     });
   });
@@ -1590,6 +1636,38 @@ async function carregarPluggyItems() {
   renderPluggyItems();
 }
 
+async function sincronizarCartoesPluggy(showFeedback = true) {
+  if (!currentControleId) return;
+  try {
+    const res = await fetch(`${API_URL}/pluggy/items`, { headers: controleHeaders() });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar itens Pluggy');
+    const itens = await res.json();
+
+    if (!itens.length) {
+      if (showFeedback) alert('Nenhum banco Pluggy vinculado para sincronizar cartões.');
+      return;
+    }
+
+    let total = 0;
+    for (const item of itens) {
+      const syncRes = await fetch(`${API_URL}/pluggy/items/${encodeURIComponent(item.itemId)}/sync-cartoes`, {
+        method: 'POST',
+        headers: controleHeaders(),
+      });
+      const data = await safeReadResponseJson(syncRes);
+      if (!syncRes.ok) throw new Error(data.error || 'Erro ao sincronizar cartões Pluggy');
+      total += Number(data.cartoesSincronizados || 0);
+    }
+
+    await carregarCartoes();
+    if (showFeedback) alert(`Sincronização concluída. ${total} cartão(ões) Pluggy atualizados.`);
+  } catch (err) {
+    if (showFeedback) alert(err.message);
+    else console.warn('Falha na sincronização silenciosa dos cartões Pluggy:', err.message);
+  }
+}
+
 async function abrirModalPluggy() {
   pluggyFeedback.classList.add('hidden');
 
@@ -1664,7 +1742,8 @@ async function conectarBancoPluggy() {
           if (!saveRes.ok) throw new Error(saveData.error || 'Erro ao vincular banco ao controle');
 
           await carregarPluggyItems();
-          mostrarFeedbackEl(pluggyFeedback, 'success', `${saveData.connectorName} vinculado a ${getMemberLabel(memberEmail)}.`);
+          await carregarCartoes();
+          mostrarFeedbackEl(pluggyFeedback, 'success', `${saveData.connectorName} vinculado a ${getMemberLabel(memberEmail)}. ${saveData.cartoesSincronizados || 0} cartão(ões) sincronizados.`);
         } catch (err) {
           mostrarFeedbackEl(pluggyFeedback, 'error', err.message);
         }
@@ -1687,6 +1766,14 @@ async function conectarBancoPluggy() {
 btnPluggyCancelar.addEventListener('click', fecharModalPluggy);
 modalPluggy.querySelector('.modal-overlay').addEventListener('click', fecharModalPluggy);
 btnPluggyConectar.addEventListener('click', conectarBancoPluggy);
+btnSyncCartoesPluggy?.addEventListener('click', async () => {
+  btnSyncCartoesPluggy.disabled = true;
+  const original = btnSyncCartoesPluggy.textContent;
+  btnSyncCartoesPluggy.textContent = 'Sincronizando...';
+  await sincronizarCartoesPluggy(true);
+  btnSyncCartoesPluggy.disabled = false;
+  btnSyncCartoesPluggy.textContent = original;
+});
 
 btnImportarBanco.addEventListener('click', async () => {
   try {

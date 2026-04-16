@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { listCartoes, createCartao, updateCartao, inativarCartao } = require('../services/masterSheet');
+const { listCartoes, createCartao, updateCartao, inativarCartao, getCartaoById } = require('../services/masterSheet');
 
 function normalizeDiaCampo(value, campo, required = false) {
   if (value === undefined || value === null || value === '') {
@@ -68,7 +68,7 @@ router.post('/', async (req, res) => {
 // ─── PATCH /cartoes/:id ───────────────────────────────────────────────────────
 router.patch('/:id', async (req, res) => {
   const { id } = req.params;
-  const { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, diaFechamentoFatura, diaVencimentoFatura } = req.body;
+  const { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, diaFechamentoFatura, diaVencimentoFatura, apelido } = req.body;
 
   if (tipoCartao !== undefined) {
     const tiposValidos = ['credito', 'debito', 'ambos'];
@@ -93,6 +93,7 @@ router.patch('/:id', async (req, res) => {
     if (finalCartao !== undefined) updates.finalCartao = String(finalCartao).trim().substring(0, 4);
     if (bandeira   !== undefined) updates.bandeira   = String(bandeira).trim().substring(0, 50);
     if (tipoCartao !== undefined) updates.tipoCartao = String(tipoCartao).toLowerCase();
+    if (apelido !== undefined) updates.cartaoNome = String(apelido || '').trim().substring(0, 100);
     if (fechamento !== undefined) updates.diaFechamentoFatura = fechamento;
     if (diaVencimentoFatura !== undefined) updates.diaVencimentoFatura = vencimento === undefined ? '' : vencimento;
 
@@ -110,8 +111,11 @@ router.patch('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    // Verifica parcelas pendentes em qualquer controle
-    // listParcelasProgramadas requer controleId, então pesquisamos via inativarCartao direto
+    const cartao = await getCartaoById(id);
+    if (!cartao) return res.status(404).json({ error: 'Cartão não encontrado' });
+    if (String(cartao.userEmail || '').toLowerCase() !== String(req.user.email || '').toLowerCase()) {
+      return res.status(403).json({ error: 'Você não tem permissão para remover este cartão' });
+    }
     await inativarCartao(id, req.user.email);
     res.json({ message: 'Cartão inativado com sucesso' });
   } catch (err) {

@@ -9,6 +9,8 @@ const {
   listPluggyItems,
   savePluggyItem,
   removePluggyItem,
+  upsertPluggyCartao,
+  inativarCartoesPorPluggyItem,
 } = require('../services/masterSheet');
 
 const MASTER_ID    = () => process.env.MASTER_SPREADSHEET_ID;
@@ -70,6 +72,58 @@ async function resolveControle(req, res) {
   }
 
   return controle;
+}
+
+function resolveCartaoNomePluggy(account, connectorName) {
+  const nomeConta = String(account?.name || '').trim();
+  if (nomeConta && nomeConta.toLowerCase() !== 'meupluggy') return nomeConta;
+  return `${String(connectorName || 'Banco').trim()} Cartão`;
+}
+
+function resolveFinalCartao(account) {
+  const fontes = [account?.number, account?.maskedNumber, account?.name];
+  for (const fonte of fontes) {
+    const digits = String(fonte || '').replace(/\D/g, '');
+    if (digits.length >= 4) return digits.slice(-4);
+  }
+  return '';
+}
+
+function isContaCartao(account) {
+  const tipo = String(account?.type || '').toUpperCase();
+  const subtipo = String(account?.subtype || '').toUpperCase();
+  return tipo.includes('CREDIT') || tipo.includes('CARD') || subtipo.includes('CREDIT') || subtipo.includes('CARD');
+}
+
+async function sincronizarCartoesPluggyDoItem(apiKey, userEmail, itemId, connectorName) {
+  const accountsRes = await pluggyRequest('GET', `/accounts?itemId=${encodeURIComponent(itemId)}`, null, apiKey);
+  if (accountsRes.status !== 200) return [];
+
+  const contas = accountsRes.body.results || [];
+  const cartoes = contas.filter(isContaCartao);
+  const sincronizados = [];
+
+  for (const account of cartoes) {
+    const nomeOriginal = resolveCartaoNomePluggy(account, connectorName);
+    const finalCartao = resolveFinalCartao(account);
+    const tipoCartao = String(account?.type || '').toUpperCase().includes('CREDIT') ? 'credito' : 'debito';
+
+    const cartao = await upsertPluggyCartao(userEmail, {
+      bancoNome: connectorName || 'Banco conectado',
+      cartaoNome: nomeOriginal,
+      nomeOriginal,
+      finalCartao,
+      bandeira: String(account?.marketingName || account?.brand || '').trim().substring(0, 50),
+      tipoCartao,
+      diaFechamentoFatura: 1,
+      diaVencimentoFatura: '',
+      pluggyItemId: itemId,
+      pluggyAccountId: String(account?.id || '').trim(),
+    });
+    sincronizados.push(cartao);
+  }
+
+  return sincronizados;
 }
 
 // ─── POST /pluggy/connect-token ───────────────────────────────────────────────
@@ -134,6 +188,7 @@ router.post('/items', async (req, res) => {
     const connectorType = itemRes.body?.connector?.type || itemRes.body?.type || '';
 
     await savePluggyItem(controle.id, memberEmail, itemId, connectorName, connectorType);
+    const cartoesSincronizados = await sincronizarCartoesPluggyDoItem(apiKey, req.user.email, itemId, connectorName);
 
     res.status(201).json({
       itemId,
@@ -141,6 +196,7 @@ router.post('/items', async (req, res) => {
       memberLabel: memberEmail.split('@')[0],
       connectorName,
       connectorType,
+      cartoesSincronizados: cartoesSincronizados.length,
     });
   } catch (err) {
     console.error('Erro ao salvar item Pluggy:', err);
@@ -155,10 +211,38 @@ router.delete('/items/:itemId', async (req, res) => {
     if (!controle) return;
 
     await removePluggyItem(controle.id, req.params.itemId);
+  await inativarCartoesPorPluggyItem(req.user.email, req.params.itemId);
     res.json({ message: 'Banco desvinculado com sucesso' });
   } catch (err) {
     console.error('Erro ao remover item Pluggy:', err);
     res.status(500).json({ error: err.message || 'Erro ao remover banco vinculado' });
+  }
+});
+
+// ─── POST /pluggy/items/:itemId/sync-cartoes ───────────────────────────────
+router.post('/items/:itemId/sync-cartoes', async (req, res) => {
+  try {
+    const controle = await resolveControle(req, res);
+    if (!controle) return;
+
+    const linkedItems = await listPluggyItems(controle.id);
+    const vinculo = linkedItems.find((item) => item.itemId === req.params.itemId);
+    if (!vinculo) {
+      return res.status(404).json({ error: 'Item Pluggy não está vinculado a este controle' });
+    }
+
+    const apiKey = await getPluggyApiKey();
+    const cartoesSincronizados = await sincronizarCartoesPluggyDoItem(
+      apiKey,
+      req.user.email,
+      vinculo.itemId,
+      vinculo.connectorName || 'Banco conectado',
+    );
+
+    res.json({ message: 'Cartões sincronizados com sucesso', cartoesSincronizados: cartoesSincronizados.length });
+  } catch (err) {
+    console.error('Erro ao sincronizar cartões Pluggy:', err);
+    res.status(500).json({ error: err.message || 'Erro ao sincronizar cartões Pluggy' });
   }
 });
 

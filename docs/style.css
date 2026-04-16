@@ -559,6 +559,12 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   gap: 8px;
 }
 
+.cartao-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .cartao-nome { font-weight: 700; }
 
 .cartao-final,
@@ -632,6 +638,16 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
 .tag-status-encerrada {
   background: #f1f5f9;
   color: var(--text-muted);
+}
+
+.tag-manual {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.tag-pluggy {
+  background: #dcfce7;
+  color: #166534;
 }
 
 /* ─────────────────────────────────────────────────────
@@ -918,6 +934,15 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   .fatura-item {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .cartao-actions {
+    width: 100%;
+  }
+
+  .cartao-actions .btn {
+    flex: 1;
+    justify-content: center;
   }
 
   .pluggy-item-actions,

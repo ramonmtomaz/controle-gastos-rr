@@ -126,7 +126,7 @@ async function setupMasterSheet() {
     { name: 'Codigos',   headers: ['controle_id', 'code', 'expires_at'] },
     { name: 'PluggyItems', headers: ['controle_id', 'member_email', 'item_id', 'connector_name', 'connector_type', 'created_at', 'updated_at'] },
     { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at', 'renda_mensal_base'] },
-    { name: 'CartoesUsuario', headers: ['id', 'user_email', 'banco_nome', 'cartao_nome', 'final_cartao', 'bandeira', 'tipo_cartao', 'active', 'created_at', 'updated_at', 'dia_fechamento_fatura', 'dia_vencimento_fatura'] },
+    { name: 'CartoesUsuario', headers: ['id', 'user_email', 'banco_nome', 'cartao_nome', 'final_cartao', 'bandeira', 'tipo_cartao', 'active', 'created_at', 'updated_at', 'dia_fechamento_fatura', 'dia_vencimento_fatura', 'origem_cartao', 'pluggy_item_id', 'pluggy_account_id', 'nome_original'] },
     { name: 'ComprasParceladas', headers: ['id', 'controle_id', 'user_email', 'cartao_id', 'descricao', 'categoria', 'responsavel', 'valor_total', 'total_parcelas', 'parcela_atual', 'valor_parcela', 'data_compra', 'status', 'created_at', 'updated_at'] },
     { name: 'ParcelasProgramadas', headers: ['id', 'compra_id', 'controle_id', 'cartao_id', 'numero_parcela', 'valor_parcela', 'data_prevista', 'status', 'gasto_id', 'created_at', 'updated_at'] },
     { name: 'RendasExtras', headers: ['id', 'user_email', 'valor', 'descricao', 'data_referencia', 'created_at'] },
@@ -470,6 +470,7 @@ async function removeRendaExtra(id, userEmail) {
 
 // ─── CartoesUsuario ─────────────────────────────────────────────────────────
 function mapCartao(row) {
+  const activeRaw = String(row[7] || 'true').toLowerCase();
   return {
     id:         row[0] || '',
     userEmail:  row[1] || '',
@@ -478,28 +479,56 @@ function mapCartao(row) {
     finalCartao: row[4] || '',
     bandeira:   row[5] || '',
     tipoCartao: row[6] || '',
-    active:     (row[7] || 'true') !== 'false',
+    active:     !['false', '0', 'no', 'inactive'].includes(activeRaw),
     createdAt:  row[8] || '',
     updatedAt:  row[9] || '',
     diaFechamentoFatura: row[10] || '1',
     diaVencimentoFatura: row[11] || '',
+    origemCartao: row[12] || 'manual',
+    pluggyItemId: row[13] || '',
+    pluggyAccountId: row[14] || '',
+    nomeOriginal: row[15] || '',
   };
+}
+
+function isCartaoAtivo(rawValue) {
+  const activeRaw = String(rawValue || 'true').toLowerCase();
+  return !['false', '0', 'no', 'inactive'].includes(activeRaw);
 }
 
 async function listCartoes(userEmail) {
   const normalizedEmail = String(userEmail || '').toLowerCase();
   const rows = await readTab('CartoesUsuario');
   return rows
-    .filter((row) => (row[1] || '').toLowerCase() === normalizedEmail && (row[7] || 'true') !== 'false')
+    .filter((row) => (row[1] || '').toLowerCase() === normalizedEmail && isCartaoAtivo(row[7]))
     .map(mapCartao);
 }
 
-async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, diaFechamentoFatura, diaVencimentoFatura }) {
+async function getCartaoById(id) {
+  const rows = await readTab('CartoesUsuario');
+  const row = rows.find((item) => item[0] === id);
+  return row ? mapCartao(row) : null;
+}
+
+async function createCartao(userEmail, {
+  bancoNome,
+  cartaoNome,
+  finalCartao,
+  bandeira,
+  tipoCartao,
+  diaFechamentoFatura,
+  diaVencimentoFatura,
+  origemCartao,
+  pluggyItemId,
+  pluggyAccountId,
+  nomeOriginal,
+}) {
   const id = randomUUID();
   const now = new Date().toISOString();
   const normalizedEmail = String(userEmail || '').toLowerCase();
   const fechamento = parseInt(String(diaFechamentoFatura || '1'), 10);
   const vencimento = diaVencimentoFatura ? parseInt(String(diaVencimentoFatura), 10) : null;
+  const origem = String(origemCartao || 'manual').trim() || 'manual';
   await appendRow('CartoesUsuario', [
     id, normalizedEmail,
     String(bancoNome || '').trim(),
@@ -510,6 +539,10 @@ async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, ban
     'true', now, now,
     String(isNaN(fechamento) ? 1 : Math.min(31, Math.max(1, fechamento))),
     vencimento && !isNaN(vencimento) ? String(Math.min(31, Math.max(1, vencimento))) : '',
+    origem,
+    String(pluggyItemId || '').trim(),
+    String(pluggyAccountId || '').trim(),
+    String(nomeOriginal || cartaoNome || '').trim(),
   ]);
   return {
     id,
@@ -524,6 +557,10 @@ async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, ban
     updatedAt: now,
     diaFechamentoFatura: String(isNaN(fechamento) ? 1 : Math.min(31, Math.max(1, fechamento))),
     diaVencimentoFatura: vencimento && !isNaN(vencimento) ? String(Math.min(31, Math.max(1, vencimento))) : '',
+    origemCartao: origem,
+    pluggyItemId: String(pluggyItemId || '').trim(),
+    pluggyAccountId: String(pluggyAccountId || '').trim(),
+    nomeOriginal: String(nomeOriginal || cartaoNome || '').trim(),
   };
 }
 
@@ -547,6 +584,10 @@ async function updateCartao(id, userEmail, updates) {
     now,
     updates.diaFechamentoFatura !== undefined ? String(updates.diaFechamentoFatura || '').trim() : (existing[10] || '1'),
     updates.diaVencimentoFatura !== undefined ? String(updates.diaVencimentoFatura || '').trim() : (existing[11] || ''),
+    updates.origemCartao !== undefined ? String(updates.origemCartao || '').trim() : (existing[12] || 'manual'),
+    updates.pluggyItemId !== undefined ? String(updates.pluggyItemId || '').trim() : (existing[13] || ''),
+    updates.pluggyAccountId !== undefined ? String(updates.pluggyAccountId || '').trim() : (existing[14] || ''),
+    updates.nomeOriginal !== undefined ? String(updates.nomeOriginal || '').trim() : (existing[15] || ''),
   ]);
   return mapCartao([
     id, normalizedEmail,
@@ -560,11 +601,89 @@ async function updateCartao(id, userEmail, updates) {
     now,
     updates.diaFechamentoFatura !== undefined ? String(updates.diaFechamentoFatura || '').trim() : (existing[10] || '1'),
     updates.diaVencimentoFatura !== undefined ? String(updates.diaVencimentoFatura || '').trim() : (existing[11] || ''),
+    updates.origemCartao !== undefined ? String(updates.origemCartao || '').trim() : (existing[12] || 'manual'),
+    updates.pluggyItemId !== undefined ? String(updates.pluggyItemId || '').trim() : (existing[13] || ''),
+    updates.pluggyAccountId !== undefined ? String(updates.pluggyAccountId || '').trim() : (existing[14] || ''),
+    updates.nomeOriginal !== undefined ? String(updates.nomeOriginal || '').trim() : (existing[15] || ''),
   ]);
 }
 
 async function inativarCartao(id, userEmail) {
   return updateCartao(id, userEmail, { active: false });
+}
+
+async function upsertPluggyCartao(userEmail, {
+  bancoNome,
+  cartaoNome,
+  finalCartao,
+  bandeira,
+  tipoCartao,
+  diaFechamentoFatura,
+  diaVencimentoFatura,
+  pluggyItemId,
+  pluggyAccountId,
+  nomeOriginal,
+}) {
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const rows = await readTab('CartoesUsuario');
+
+  const byAccount = rows.findIndex((row) => (
+    (row[1] || '').toLowerCase() === normalizedEmail
+    && (row[12] || 'manual') === 'pluggy'
+    && (row[14] || '') === String(pluggyAccountId || '')
+  ));
+
+  if (byAccount !== -1) {
+    const existing = mapCartao(rows[byAccount]);
+    return updateCartao(existing.id, normalizedEmail, {
+      bancoNome,
+      cartaoNome,
+      finalCartao,
+      bandeira,
+      tipoCartao,
+      diaFechamentoFatura,
+      diaVencimentoFatura,
+      origemCartao: 'pluggy',
+      pluggyItemId,
+      pluggyAccountId,
+      nomeOriginal,
+      active: true,
+    });
+  }
+
+  return createCartao(normalizedEmail, {
+    bancoNome,
+    cartaoNome,
+    finalCartao,
+    bandeira,
+    tipoCartao,
+    diaFechamentoFatura,
+    diaVencimentoFatura,
+    origemCartao: 'pluggy',
+    pluggyItemId,
+    pluggyAccountId,
+    nomeOriginal,
+  });
+}
+
+async function inativarCartoesPorPluggyItem(userEmail, pluggyItemId) {
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const itemId = String(pluggyItemId || '').trim();
+  if (!itemId) return;
+
+  const rows = await readTab('CartoesUsuario');
+  const alvos = rows
+    .filter((row) => (
+      (row[1] || '').toLowerCase() === normalizedEmail
+      && (row[12] || 'manual') === 'pluggy'
+      && (row[13] || '') === itemId
+      && isCartaoAtivo(row[7])
+    ))
+    .map((row) => row[0]);
+
+  for (const cartaoId of alvos) {
+    await inativarCartao(cartaoId, normalizedEmail);
+  }
 }
 
 // ─── ComprasParceladas ────────────────────────────────────────────────────────
@@ -762,9 +881,12 @@ module.exports = {
   getOrCreateInviteCode,
   joinByCode,
   listCartoes,
+  getCartaoById,
   createCartao,
   updateCartao,
   inativarCartao,
+  upsertPluggyCartao,
+  inativarCartoesPorPluggyItem,
   listComprasParceladas,
   createCompraParcelada,
   getCompraParceladaById,
