@@ -1,6 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { listCartoes, createCartao, updateCartao, inativarCartao, listParcelasProgramadas } = require('../services/masterSheet');
+const { listCartoes, createCartao, updateCartao, inativarCartao } = require('../services/masterSheet');
+
+function normalizeDiaCampo(value, campo, required = false) {
+  if (value === undefined || value === null || value === '') {
+    if (required) throw new Error(`${campo} é obrigatório`);
+    return undefined;
+  }
+  const numero = parseInt(String(value), 10);
+  if (isNaN(numero) || numero < 1 || numero > 31) {
+    throw new Error(`${campo} deve ser um número entre 1 e 31`);
+  }
+  return numero;
+}
 
 // ─── GET /cartoes ─────────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -15,7 +27,7 @@ router.get('/', async (req, res) => {
 
 // ─── POST /cartoes ────────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao } = req.body;
+  const { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, diaFechamentoFatura, diaVencimentoFatura } = req.body;
 
   if (!bancoNome || !cartaoNome) {
     return res.status(400).json({ error: 'Campos obrigatórios: bancoNome, cartaoNome' });
@@ -27,6 +39,15 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'tipoCartao deve ser credito, debito ou ambos' });
   }
 
+  let fechamento;
+  let vencimento;
+  try {
+    fechamento = normalizeDiaCampo(diaFechamentoFatura, 'diaFechamentoFatura', true);
+    vencimento = normalizeDiaCampo(diaVencimentoFatura, 'diaVencimentoFatura', false);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
   try {
     const cartao = await createCartao(req.user.email, {
       bancoNome: String(bancoNome).trim().substring(0, 100),
@@ -34,6 +55,8 @@ router.post('/', async (req, res) => {
       finalCartao: String(finalCartao || '').trim().substring(0, 4),
       bandeira: String(bandeira || '').trim().substring(0, 50),
       tipoCartao: tipo,
+      diaFechamentoFatura: fechamento,
+      diaVencimentoFatura: vencimento,
     });
     res.status(201).json(cartao);
   } catch (err) {
@@ -45,13 +68,22 @@ router.post('/', async (req, res) => {
 // ─── PATCH /cartoes/:id ───────────────────────────────────────────────────────
 router.patch('/:id', async (req, res) => {
   const { id } = req.params;
-  const { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao } = req.body;
+  const { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, diaFechamentoFatura, diaVencimentoFatura } = req.body;
 
   if (tipoCartao !== undefined) {
     const tiposValidos = ['credito', 'debito', 'ambos'];
     if (!tiposValidos.includes(String(tipoCartao).toLowerCase())) {
       return res.status(400).json({ error: 'tipoCartao deve ser credito, debito ou ambos' });
     }
+  }
+
+  let fechamento;
+  let vencimento;
+  try {
+    fechamento = normalizeDiaCampo(diaFechamentoFatura, 'diaFechamentoFatura', false);
+    vencimento = normalizeDiaCampo(diaVencimentoFatura, 'diaVencimentoFatura', false);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 
   try {
@@ -61,6 +93,8 @@ router.patch('/:id', async (req, res) => {
     if (finalCartao !== undefined) updates.finalCartao = String(finalCartao).trim().substring(0, 4);
     if (bandeira   !== undefined) updates.bandeira   = String(bandeira).trim().substring(0, 50);
     if (tipoCartao !== undefined) updates.tipoCartao = String(tipoCartao).toLowerCase();
+    if (fechamento !== undefined) updates.diaFechamentoFatura = fechamento;
+    if (diaVencimentoFatura !== undefined) updates.diaVencimentoFatura = vencimento === undefined ? '' : vencimento;
 
     const cartao = await updateCartao(id, req.user.email, updates);
     res.json(cartao);

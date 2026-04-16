@@ -508,6 +508,302 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   font-size: 14px;
 }
 
+/* ─────────────────────────────────────────────────────
+   Section subtitle
+───────────────────────────────────────────────────── */
+.section-subtitle {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* ─────────────────────────────────────────────────────
+   Cartões section
+───────────────────────────────────────────────────── */
+.cartoes-section { margin-top: 24px; }
+
+.cartoes-lista {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cartao-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.cartao-info-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cartao-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cartao-meta-row,
+.compra-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cartao-nome { font-weight: 700; }
+
+.cartao-final,
+.cartao-banco {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.cartao-tipo,
+.cartao-bandeira {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+
+/* ─────────────────────────────────────────────────────
+   Compras parceladas section
+───────────────────────────────────────────────────── */
+.compras-section { margin-top: 24px; }
+
+.parcelas-importar {
+  margin-bottom: 16px;
+  cursor: pointer;
+}
+
+.parcelas-importar summary {
+  font-weight: 600;
+  color: var(--primary);
+  padding: 8px 0;
+  user-select: none;
+}
+
+.compras-lista {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compra-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.compra-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compra-nome { font-weight: 700; }
+
+.compra-cartao,
+.compra-valor {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.tag-status-ativa {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tag-status-encerrada {
+  background: #f1f5f9;
+  color: var(--text-muted);
+}
+
+/* ─────────────────────────────────────────────────────
+   Parcelamento form UI
+───────────────────────────────────────────────────── */
+.parcelas-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.parcelas-titulo {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.parcela-preview {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--primary);
+  padding: 10px 0;
+}
+
+/* ─────────────────────────────────────────────────────
+   Estatísticas
+───────────────────────────────────────────────────── */
+.estatisticas-top,
+.estatisticas-faturas,
+.estatisticas-categorias {
+  margin-bottom: 16px;
+}
+
+.estatisticas-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.estatisticas-head h2 { font-size: 18px; }
+
+.estatisticas-filtros {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.estatisticas-filtros label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.faturas-lista,
+.categorias-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fatura-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--bg);
+}
+
+.fatura-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.fatura-header h3 { font-size: 16px; }
+.fatura-header p { color: var(--text-muted); font-size: 13px; }
+.fatura-total { font-size: 18px; font-weight: 700; color: var(--primary-h); }
+
+.fatura-itens {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fatura-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.categoria-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.categoria-rank { font-weight: 800; color: var(--primary); }
+.categoria-nome { font-weight: 600; }
+.categoria-valor { font-weight: 700; color: var(--danger); }
+
+/* ─────────────────────────────────────────────────────
+   Renda extra
+───────────────────────────────────────────────────── */
+.renda-extra-box {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.renda-extra-box h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+}
+
+.renda-extra-lista {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.renda-extra-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+}
+
+.renda-extra-titulo { font-weight: 600; }
+.renda-extra-meta { font-size: 13px; color: var(--text-muted); }
+
+/* ─────────────────────────────────────────────────────
+   Tag variants
+───────────────────────────────────────────────────── */
+.tag-pagamento {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.tag-parcela {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.empty-state-inline {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 12px 0;
+}
+
 /* ─── Responsivo ────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   body { font-size: 14px; }
@@ -525,22 +821,18 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
     white-space: nowrap;
   }
 
-  /* Navbar */
   .navbar { padding: 0 12px; height: 52px; }
   .navbar-brand { font-size: 14px; gap: 6px; }
   .user-avatar { width: 30px; height: 30px; }
   #user-name, #lobby-user-name { display: none; }
 
-  /* Login */
   .login-card { padding: 36px 20px; margin: 16px; }
 
-  /* Summary */
-  .summary-cards { grid-template-columns: repeat(3,1fr); gap: 10px; }
+  .summary-cards { grid-template-columns: repeat(2,1fr); gap: 10px; }
   .summary-value { font-size: 16px; }
   .summary-label { font-size: 11px; }
   .card { padding: 16px; }
 
-  /* Formulário */
   .form-section h2 { font-size: 16px; margin-bottom: 14px; }
   .form-grid { grid-template-columns: 1fr; gap: 12px; }
   .form-group-full { grid-column: 1; }
@@ -548,14 +840,12 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   .form-actions .btn { width: 100%; justify-content: center; }
   .feedback { flex: none; }
 
-  /* Tabela header */
   .table-section h2 { font-size: 16px; }
   .table-header { flex-direction: column; align-items: flex-start; gap: 12px; }
   .table-filters { width: 100%; flex-direction: column; gap: 8px; }
   .filter-input { width: 100%; min-width: unset; }
   #btn-refresh, #btn-importar-banco, #btn-conta-salvar { width: 100%; justify-content: center; }
 
-  /* Tabela → cards */
   .table-wrapper { overflow-x: unset; }
   table, thead, tbody, th, td, tr { display: block; }
   thead { display: none; }
@@ -595,7 +885,6 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   tbody td.td-action::before { display: none; }
   tbody td.text-right { text-align: left; }
 
-  /* Modal → bottom sheet */
   .modal { align-items: flex-end; }
   .modal-box {
     border-radius: 20px 20px 0 0;
@@ -609,7 +898,6 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   .modal-actions { flex-direction: column-reverse; gap: 10px; }
   .modal-actions .btn { width: 100%; justify-content: center; }
 
-  /* Lobby */
   .lobby-section { padding: 16px; }
   .lobby-header { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
   .lobby-header h2 { font-size: 18px; }
@@ -619,11 +907,15 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   .controle-card-actions { width: 100%; }
   .controle-card-actions .btn { flex: 1; justify-content: center; }
 
-  /* Convite */
   .invite-code { font-size: 22px; letter-spacing: 4px; }
   .invite-code-box { flex-wrap: wrap; }
 
-  .pluggy-item {
+  .pluggy-item,
+  .cartao-item,
+  .compra-item,
+  .renda-extra-item,
+  .fatura-header,
+  .fatura-item {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -633,131 +925,13 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
     width: 100%;
     flex-direction: column;
     align-items: stretch;
-
-  /* ─────────────────────────────────────────────────────
-     Section subtitle
-  ───────────────────────────────────────────────────── */
-  .section-subtitle {
-    color: var(--text-muted);
-    margin-bottom: 16px;
-    font-size: 0.9rem;
   }
 
-  /* ─────────────────────────────────────────────────────
-     Cartões section
-  ───────────────────────────────────────────────────── */
-  .cartoes-section { margin-top: 24px; }
-
-  .cartoes-lista {
-    margin-top: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  .fatura-item,
+  .categoria-item {
+    grid-template-columns: 1fr;
   }
-
-  .cartao-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-  }
-
-  .cartao-info {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .cartao-nome { font-weight: 600; }
-
-  .cartao-final,
-  .cartao-banco {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-  }
-
-  .cartao-tipo,
-  .cartao-bandeira {
-    font-size: 0.75rem;
-    padding: 2px 8px;
-    border-radius: 12px;
-    background: var(--bg-muted, #f1f5f9);
-    color: var(--text-muted);
-  }
-
-  /* ─────────────────────────────────────────────────────
-     Compras parceladas section
-  ───────────────────────────────────────────────────── */
-  .compras-section { margin-top: 24px; }
-
-  .parcelas-importar {
-    margin-bottom: 16px;
-    cursor: pointer;
-  }
-
-  .parcelas-importar summary {
-    font-weight: 600;
-    color: var(--primary);
-    padding: 8px 0;
-    user-select: none;
-  }
-
-  .compras-lista {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .compra-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-  }
-
-  .compra-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .compra-nome { font-weight: 600; }
-
-  .compra-cartao,
-  .compra-valor {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
-
-  .tag-status-ativa {
-    background: #d1fae5;
-    color: #065f46;
-  }
-
-  .tag-status-encerrada {
-    background: var(--bg-muted, #f1f5f9);
-    color: var(--text-muted);
-  }
-
-  /* ─────────────────────────────────────────────────────
-     Parcelamento form UI
-  ───────────────────────────────────────────────────── */
-  .parcelas-section {
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-  }
-
-  .parcelas-titulo {
-    font-size: 1rem;
+}
     font-weight: 600;
     margin-bottom: 12px;
     color: var(--text);

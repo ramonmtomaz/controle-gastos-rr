@@ -4,7 +4,7 @@ const { randomBytes, randomUUID } = require('crypto');
 // ─── Sheets client (service account) ────────────────────────────────────────
 let _sheets = null;
 let _masterSetupDone = false;
-const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems', 'Usuarios', 'CartoesUsuario', 'ComprasParceladas', 'ParcelasProgramadas']);
+const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems', 'Usuarios', 'CartoesUsuario', 'ComprasParceladas', 'ParcelasProgramadas', 'RendasExtras']);
 
 function getServiceSheets() {
   if (_sheets) return _sheets;
@@ -125,10 +125,11 @@ async function setupMasterSheet() {
     { name: 'Membros',   headers: ['controle_id', 'email', 'role', 'joined_at'] },
     { name: 'Codigos',   headers: ['controle_id', 'code', 'expires_at'] },
     { name: 'PluggyItems', headers: ['controle_id', 'member_email', 'item_id', 'connector_name', 'connector_type', 'created_at', 'updated_at'] },
-    { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at'] },
-    { name: 'CartoesUsuario', headers: ['id', 'user_email', 'banco_nome', 'cartao_nome', 'final_cartao', 'bandeira', 'tipo_cartao', 'active', 'created_at', 'updated_at'] },
+    { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at', 'renda_mensal_base'] },
+    { name: 'CartoesUsuario', headers: ['id', 'user_email', 'banco_nome', 'cartao_nome', 'final_cartao', 'bandeira', 'tipo_cartao', 'active', 'created_at', 'updated_at', 'dia_fechamento_fatura', 'dia_vencimento_fatura'] },
     { name: 'ComprasParceladas', headers: ['id', 'controle_id', 'user_email', 'cartao_id', 'descricao', 'categoria', 'responsavel', 'valor_total', 'total_parcelas', 'parcela_atual', 'valor_parcela', 'data_compra', 'status', 'created_at', 'updated_at'] },
     { name: 'ParcelasProgramadas', headers: ['id', 'compra_id', 'controle_id', 'cartao_id', 'numero_parcela', 'valor_parcela', 'data_prevista', 'status', 'gasto_id', 'created_at', 'updated_at'] },
+    { name: 'RendasExtras', headers: ['id', 'user_email', 'valor', 'descricao', 'data_referencia', 'created_at'] },
   ];
 
   const newTabs = tabs.filter(t => !existing.includes(t.name));
@@ -298,6 +299,7 @@ function mapUserProfile(row) {
     pictureUrl: row[3] || '',
     createdAt: row[4] || '',
     updatedAt: row[5] || '',
+    rendaMensalBase: row[6] || '0',
   };
 }
 
@@ -314,7 +316,8 @@ async function getOrCreateUserProfile(email, defaults = {}) {
   const phone = String(defaults.phone || '').trim();
   const pictureUrl = String(defaults.pictureUrl || defaults.picture || '').trim();
 
-  await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now]);
+  const rendaMensalBase = parseFloat(String(defaults.rendaMensalBase || 0).replace(',', '.')) || 0;
+  await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now, rendaMensalBase.toFixed(2)]);
   return {
     email: normalizedEmail,
     displayName,
@@ -322,6 +325,7 @@ async function getOrCreateUserProfile(email, defaults = {}) {
     pictureUrl,
     createdAt: now,
     updatedAt: now,
+    rendaMensalBase: rendaMensalBase.toFixed(2),
   };
 }
 
@@ -337,7 +341,8 @@ async function updateUserProfile(email, updates = {}) {
     const displayName = String(updates.displayName || updates.name || '').trim();
     const phone = String(updates.phone || '').trim();
     const pictureUrl = String(updates.pictureUrl || updates.picture || '').trim();
-    await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now]);
+    const rendaMensalBase = parseFloat(String(updates.rendaMensalBase || 0).replace(',', '.')) || 0;
+    await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now, rendaMensalBase.toFixed(2)]);
     return {
       email: normalizedEmail,
       displayName,
@@ -345,6 +350,7 @@ async function updateUserProfile(email, updates = {}) {
       pictureUrl,
       createdAt: now,
       updatedAt: now,
+      rendaMensalBase: rendaMensalBase.toFixed(2),
     };
   }
 
@@ -358,6 +364,9 @@ async function updateUserProfile(email, updates = {}) {
   const nextPictureUrl = updates.pictureUrl !== undefined
     ? String(updates.pictureUrl || '').trim()
     : (existing[3] || '');
+  const nextRendaMensalBase = updates.rendaMensalBase !== undefined
+    ? ((parseFloat(String(updates.rendaMensalBase || 0).replace(',', '.')) || 0).toFixed(2))
+    : ((parseFloat(String(existing[6] || 0).replace(',', '.')) || 0).toFixed(2));
   const createdAt = existing[4] || now;
 
   await updateRow('Usuarios', index, [
@@ -367,6 +376,7 @@ async function updateUserProfile(email, updates = {}) {
     nextPictureUrl,
     createdAt,
     now,
+    nextRendaMensalBase,
   ]);
 
   return {
@@ -376,7 +386,86 @@ async function updateUserProfile(email, updates = {}) {
     pictureUrl: nextPictureUrl,
     createdAt,
     updatedAt: now,
+    rendaMensalBase: nextRendaMensalBase,
   };
+}
+
+async function listUserProfilesByEmails(emails = []) {
+  const normalizedSet = new Set((emails || []).map((email) => String(email || '').toLowerCase()).filter(Boolean));
+  if (normalizedSet.size === 0) return [];
+  const rows = await readTab('Usuarios');
+  return rows
+    .filter((row) => normalizedSet.has(String(row[0] || '').toLowerCase()))
+    .map(mapUserProfile);
+}
+
+function monthKeyFromDate(value) {
+  if (!value) return '';
+  const date = String(value).split('T')[0];
+  const parts = date.split('-');
+  if (parts.length < 2) return '';
+  return `${parts[0]}-${parts[1]}`;
+}
+
+function mapRendaExtra(row) {
+  return {
+    id: row[0] || '',
+    userEmail: row[1] || '',
+    valor: row[2] || '0',
+    descricao: row[3] || '',
+    dataReferencia: row[4] || '',
+    createdAt: row[5] || '',
+  };
+}
+
+async function listRendasExtrasByUser(userEmail, mes) {
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const rows = await readTab('RendasExtras');
+  return rows
+    .filter((row) => {
+      if (String(row[1] || '').toLowerCase() !== normalizedEmail) return false;
+      if (!mes) return true;
+      return monthKeyFromDate(row[4] || '') === mes;
+    })
+    .map(mapRendaExtra);
+}
+
+async function listRendasExtrasByUsers(userEmails = [], mes) {
+  const normalizedSet = new Set((userEmails || []).map((email) => String(email || '').toLowerCase()).filter(Boolean));
+  if (normalizedSet.size === 0) return [];
+  const rows = await readTab('RendasExtras');
+  return rows
+    .filter((row) => {
+      if (!normalizedSet.has(String(row[1] || '').toLowerCase())) return false;
+      if (!mes) return true;
+      return monthKeyFromDate(row[4] || '') === mes;
+    })
+    .map(mapRendaExtra);
+}
+
+async function createRendaExtra(userEmail, { valor, descricao, dataReferencia }) {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const valorNumerico = parseFloat(String(valor).replace(',', '.')) || 0;
+  const data = String(dataReferencia || '').trim() || now.split('T')[0];
+  await appendRow('RendasExtras', [
+    id,
+    normalizedEmail,
+    valorNumerico.toFixed(2),
+    String(descricao || '').trim().substring(0, 200),
+    data,
+    now,
+  ]);
+  return { id, userEmail: normalizedEmail, valor: valorNumerico.toFixed(2), descricao: String(descricao || '').trim(), dataReferencia: data, createdAt: now };
+}
+
+async function removeRendaExtra(id, userEmail) {
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const rows = await readTab('RendasExtras');
+  const index = rows.findIndex((row) => row[0] === id && String(row[1] || '').toLowerCase() === normalizedEmail);
+  if (index === -1) throw new Error('Renda extra não encontrada');
+  await deleteRowInMaster('RendasExtras', index);
 }
 
 // ─── CartoesUsuario ─────────────────────────────────────────────────────────
@@ -392,6 +481,8 @@ function mapCartao(row) {
     active:     (row[7] || 'true') !== 'false',
     createdAt:  row[8] || '',
     updatedAt:  row[9] || '',
+    diaFechamentoFatura: row[10] || '1',
+    diaVencimentoFatura: row[11] || '',
   };
 }
 
@@ -403,10 +494,12 @@ async function listCartoes(userEmail) {
     .map(mapCartao);
 }
 
-async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao }) {
+async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, diaFechamentoFatura, diaVencimentoFatura }) {
   const id = randomUUID();
   const now = new Date().toISOString();
   const normalizedEmail = String(userEmail || '').toLowerCase();
+  const fechamento = parseInt(String(diaFechamentoFatura || '1'), 10);
+  const vencimento = diaVencimentoFatura ? parseInt(String(diaVencimentoFatura), 10) : null;
   await appendRow('CartoesUsuario', [
     id, normalizedEmail,
     String(bancoNome || '').trim(),
@@ -415,8 +508,23 @@ async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, ban
     String(bandeira || '').trim(),
     String(tipoCartao || 'credito').trim(),
     'true', now, now,
+    String(isNaN(fechamento) ? 1 : Math.min(31, Math.max(1, fechamento))),
+    vencimento && !isNaN(vencimento) ? String(Math.min(31, Math.max(1, vencimento))) : '',
   ]);
-  return { id, userEmail: normalizedEmail, bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, active: true, createdAt: now, updatedAt: now };
+  return {
+    id,
+    userEmail: normalizedEmail,
+    bancoNome,
+    cartaoNome,
+    finalCartao,
+    bandeira,
+    tipoCartao,
+    active: true,
+    createdAt: now,
+    updatedAt: now,
+    diaFechamentoFatura: String(isNaN(fechamento) ? 1 : Math.min(31, Math.max(1, fechamento))),
+    diaVencimentoFatura: vencimento && !isNaN(vencimento) ? String(Math.min(31, Math.max(1, vencimento))) : '',
+  };
 }
 
 async function updateCartao(id, userEmail, updates) {
@@ -437,6 +545,8 @@ async function updateCartao(id, userEmail, updates) {
     updates.active     !== undefined ? String(updates.active) : (existing[7] || 'true'),
     existing[8] || now,
     now,
+    updates.diaFechamentoFatura !== undefined ? String(updates.diaFechamentoFatura || '').trim() : (existing[10] || '1'),
+    updates.diaVencimentoFatura !== undefined ? String(updates.diaVencimentoFatura || '').trim() : (existing[11] || ''),
   ]);
   return mapCartao([
     id, normalizedEmail,
@@ -448,6 +558,8 @@ async function updateCartao(id, userEmail, updates) {
     updates.active     !== undefined ? String(updates.active) : (existing[7] || 'true'),
     existing[8] || now,
     now,
+    updates.diaFechamentoFatura !== undefined ? String(updates.diaFechamentoFatura || '').trim() : (existing[10] || '1'),
+    updates.diaVencimentoFatura !== undefined ? String(updates.diaVencimentoFatura || '').trim() : (existing[11] || ''),
   ]);
 }
 
@@ -641,6 +753,11 @@ module.exports = {
   removePluggyItem,
   getOrCreateUserProfile,
   updateUserProfile,
+  listUserProfilesByEmails,
+  listRendasExtrasByUser,
+  listRendasExtrasByUsers,
+  createRendaExtra,
+  removeRendaExtra,
   deleteControle,
   getOrCreateInviteCode,
   joinByCode,

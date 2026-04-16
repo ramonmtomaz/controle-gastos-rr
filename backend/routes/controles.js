@@ -100,6 +100,57 @@ router.get('/:id/responsaveis', async (req, res) => {
   }
 });
 
+// ─── GET /controles/:id/renda-geral?mes=YYYY-MM — soma renda dos membros ───
+router.get('/:id/renda-geral', async (req, res) => {
+  const { id } = req.params;
+  const mes = req.query.mes ? String(req.query.mes) : new Date().toISOString().slice(0, 7);
+
+  try {
+    if (!(await master.isMembro(id, req.user.email))) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const membros = await master.getMembros(id);
+    const emails = membros.map((m) => m.email).filter(Boolean);
+    const perfis = await master.listUserProfilesByEmails(emails);
+    const extras = await master.listRendasExtrasByUsers(emails, mes);
+
+    const extrasPorEmail = extras.reduce((acc, item) => {
+      const email = String(item.userEmail || '').toLowerCase();
+      acc[email] = (acc[email] || 0) + (parseFloat(item.valor || 0) || 0);
+      return acc;
+    }, {});
+
+    const membrosRenda = emails.map((email) => {
+      const perfil = perfis.find((p) => String(p.email || '').toLowerCase() === String(email || '').toLowerCase());
+      const base = parseFloat(perfil?.rendaMensalBase || 0) || 0;
+      const extra = extrasPorEmail[String(email || '').toLowerCase()] || 0;
+      return {
+        email,
+        rendaMensalBase: base.toFixed(2),
+        rendaExtraMes: extra.toFixed(2),
+        rendaTotalMes: (base + extra).toFixed(2),
+      };
+    });
+
+    const rendaMensalBase = membrosRenda.reduce((sum, item) => sum + (parseFloat(item.rendaMensalBase) || 0), 0);
+    const rendaExtraMes = membrosRenda.reduce((sum, item) => sum + (parseFloat(item.rendaExtraMes) || 0), 0);
+    const rendaGeralMes = rendaMensalBase + rendaExtraMes;
+
+    res.json({
+      controleId: id,
+      mes,
+      rendaMensalBase: rendaMensalBase.toFixed(2),
+      rendaExtraMes: rendaExtraMes.toFixed(2),
+      rendaGeralMes: rendaGeralMes.toFixed(2),
+      membros: membrosRenda,
+    });
+  } catch (err) {
+    console.error('Erro ao calcular renda geral:', err);
+    res.status(500).json({ error: 'Erro ao calcular renda geral do controle' });
+  }
+});
+
 // ─── DELETE /controles/:id/leave — sair do controle ──────────────────────────
 router.delete('/:id/leave', async (req, res) => {
   const { id } = req.params;

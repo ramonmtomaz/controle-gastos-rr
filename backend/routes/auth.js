@@ -2,7 +2,13 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { client, requireAuth } = require('../middleware/auth');
-const { getOrCreateUserProfile, updateUserProfile } = require('../services/masterSheet');
+const {
+  getOrCreateUserProfile,
+  updateUserProfile,
+  listRendasExtrasByUser,
+  createRendaExtra,
+  removeRendaExtra,
+} = require('../services/masterSheet');
 
 // Apenas escopos para login — Sheets é acessado pela service account
 const SCOPES = [
@@ -92,7 +98,7 @@ router.get('/profile', requireAuth, async (req, res) => {
 
 // PATCH /auth/profile — atualiza nome exibido e telefone
 router.patch('/profile', requireAuth, async (req, res) => {
-  const { displayName, phone } = req.body || {};
+  const { displayName, phone, rendaMensalBase } = req.body || {};
 
   if (displayName !== undefined && !String(displayName).trim()) {
     return res.status(400).json({ error: 'Nome exibido é obrigatório' });
@@ -102,16 +108,73 @@ router.patch('/profile', requireAuth, async (req, res) => {
     ? undefined
     : String(phone).replace(/[^0-9()+\-\s]/g, '').trim();
 
+  let rendaNormalizada;
+  if (rendaMensalBase !== undefined) {
+    const numero = parseFloat(String(rendaMensalBase).replace(',', '.'));
+    if (isNaN(numero) || numero < 0) {
+      return res.status(400).json({ error: 'rendaMensalBase inválida' });
+    }
+    rendaNormalizada = numero.toFixed(2);
+  }
+
   try {
     const profile = await updateUserProfile(req.user.email, {
       displayName,
       phone: sanitizedPhone,
       pictureUrl: req.user.picture,
+      rendaMensalBase: rendaNormalizada,
     });
     res.json({ profile });
   } catch (err) {
     console.error('Erro ao atualizar perfil:', err);
     res.status(500).json({ error: 'Erro ao atualizar perfil do usuário' });
+  }
+});
+
+// GET /auth/renda-extras?mes=YYYY-MM — lista renda extra do usuário
+router.get('/renda-extras', requireAuth, async (req, res) => {
+  try {
+    const mes = req.query.mes ? String(req.query.mes) : null;
+    const extras = await listRendasExtrasByUser(req.user.email, mes);
+    res.json({ extras });
+  } catch (err) {
+    console.error('Erro ao listar rendas extras:', err);
+    res.status(500).json({ error: 'Erro ao listar rendas extras' });
+  }
+});
+
+// POST /auth/renda-extras — cria renda extra eventual do usuário
+router.post('/renda-extras', requireAuth, async (req, res) => {
+  const { valor, descricao, dataReferencia } = req.body || {};
+  const valorNumerico = parseFloat(String(valor || '').replace(',', '.'));
+  if (isNaN(valorNumerico) || valorNumerico <= 0) {
+    return res.status(400).json({ error: 'Valor da renda extra inválido' });
+  }
+
+  try {
+    const extra = await createRendaExtra(req.user.email, {
+      valor: valorNumerico,
+      descricao: String(descricao || '').trim().substring(0, 200),
+      dataReferencia: dataReferencia ? String(dataReferencia).trim() : '',
+    });
+    res.status(201).json({ extra });
+  } catch (err) {
+    console.error('Erro ao criar renda extra:', err);
+    res.status(500).json({ error: 'Erro ao registrar renda extra' });
+  }
+});
+
+// DELETE /auth/renda-extras/:id — remove renda extra do usuário
+router.delete('/renda-extras/:id', requireAuth, async (req, res) => {
+  try {
+    await removeRendaExtra(req.params.id, req.user.email);
+    res.json({ message: 'Renda extra removida' });
+  } catch (err) {
+    if (err.message === 'Renda extra não encontrada') {
+      return res.status(404).json({ error: err.message });
+    }
+    console.error('Erro ao remover renda extra:', err);
+    res.status(500).json({ error: 'Erro ao remover renda extra' });
   }
 });
 

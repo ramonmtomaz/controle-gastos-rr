@@ -29,6 +29,8 @@ let currentControleOwnerEmail = null;
 let currentUser         = null; // { email, name, picture }
 let currentCartoes      = [];
 let currentComprasParceladas = [];
+let currentRendasExtras = [];
+let rendaGeralAtual = null;
 
 // ─── Elementos: comuns ────────────────────────────────────────────────────────
 const loginScreen = document.getElementById('login-screen');
@@ -89,6 +91,7 @@ const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 const dashboardMenuButtons = Array.from(document.querySelectorAll('.dashboard-menu-btn'));
 const dashboardAreas = {
   resumo: document.getElementById('area-resumo'),
+  estatisticas: document.getElementById('area-estatisticas'),
   lancar: document.getElementById('area-lancar'),
   investimento: document.getElementById('area-investimento'),
   lancamentos: document.getElementById('area-lancamentos'),
@@ -102,8 +105,25 @@ const contaEmail      = document.getElementById('conta-email');
 const contaNome       = document.getElementById('conta-nome');
 const contaTelefone   = document.getElementById('conta-telefone');
 const contaFoto       = document.getElementById('conta-foto');
+const contaRendaBase  = document.getElementById('conta-renda-base');
 const contaFeedback   = document.getElementById('conta-feedback');
 const btnContaSalvar  = document.getElementById('btn-conta-salvar');
+const formRendaExtra  = document.getElementById('form-renda-extra');
+const btnRendaExtra   = document.getElementById('btn-renda-extra');
+const rendaExtraValor = document.getElementById('renda-extra-valor');
+const rendaExtraData  = document.getElementById('renda-extra-data');
+const rendaExtraDesc  = document.getElementById('renda-extra-desc');
+const rendaExtraFeedback = document.getElementById('renda-extra-feedback');
+const listaRendaExtra = document.getElementById('lista-renda-extra');
+
+// ─── Elementos: Estatísticas ───────────────────────────────────────────────
+const estatCartao = document.getElementById('estat-cartao');
+const estatGastoGeral = document.getElementById('estat-gasto-geral');
+const estatRendaGeral = document.getElementById('estat-renda-geral');
+const estatDiferenca = document.getElementById('estat-diferenca');
+const estatPercentual = document.getElementById('estat-percentual');
+const estatFaturasLista = document.getElementById('estat-faturas-lista');
+const estatCategoriasLista = document.getElementById('estat-categorias-lista');
 
 // ─── Elementos: Pluggy ───────────────────────────────────────────────────────────
 const btnImportarBanco  = document.getElementById('btn-importar-banco');
@@ -227,6 +247,16 @@ function preencherContaForm(profile) {
   contaNome.value = profile.displayName || currentUser?.name || '';
   contaTelefone.value = profile.phone || '';
   contaFoto.value = profile.pictureUrl || currentUser?.picture || '';
+  contaRendaBase.value = profile.rendaMensalBase || '0';
+}
+
+function mesAtual() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function isMesAtual(dataIso) {
+  if (!dataIso) return false;
+  return String(dataIso).slice(0, 7) === mesAtual();
 }
 
 async function carregarPerfilConta() {
@@ -247,6 +277,33 @@ async function carregarPerfilConta() {
   });
 }
 
+async function carregarRendaGeralControle() {
+  if (!currentControleId) return;
+  const res = await fetch(`${API_URL}/controles/${currentControleId}/renda-geral?mes=${mesAtual()}`, {
+    headers: authHeaders(),
+  });
+  if (res.status === 401) {
+    removeToken();
+    mostrarTelaLogin();
+    return;
+  }
+  if (!res.ok) throw new Error('Erro ao carregar renda geral do controle');
+  rendaGeralAtual = await res.json();
+}
+
+async function carregarRendasExtras() {
+  const res = await fetch(`${API_URL}/auth/renda-extras?mes=${mesAtual()}`, { headers: authHeaders() });
+  if (res.status === 401) {
+    removeToken();
+    mostrarTelaLogin();
+    return;
+  }
+  if (!res.ok) throw new Error('Erro ao carregar rendas extras');
+  const data = await res.json();
+  currentRendasExtras = data.extras || [];
+  renderRendasExtras();
+}
+
 function voltarLobby() {
   currentControleId   = null;
   currentControleNome = null;
@@ -256,6 +313,8 @@ function voltarLobby() {
   currentProfile = null;
   currentCartoes = [];
   currentComprasParceladas = [];
+  currentRendasExtras = [];
+  rendaGeralAtual = null;
   setDashboardArea('resumo');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
@@ -588,12 +647,17 @@ async function abrirControle(id, nome, ownerEmail) {
   setDashboardArea(currentDashboardArea || 'resumo');
   document.getElementById('input-data').valueAsDate = new Date();
   document.getElementById('inv-data').valueAsDate = new Date();
+  rendaExtraData.valueAsDate = new Date();
   try {
     await carregarResponsaveis();
     await carregarPerfilConta();
+    await carregarRendasExtras();
     await carregarCartoes();
     await carregarComprasParceladas();
     await carregarGastos();
+    await carregarRendaGeralControle();
+    atualizarResumo();
+    atualizarEstatisticas();
   } catch (err) {
     console.error(err);
     mostrarFeedback('error', 'Não foi possível carregar os membros deste controle.');
@@ -605,6 +669,9 @@ btnLobby.addEventListener('click', voltarLobby);
 dashboardMenuButtons.forEach((button) => {
   button.addEventListener('click', () => {
     setDashboardArea(button.dataset.area);
+    if (button.dataset.area === 'estatisticas') {
+      atualizarEstatisticas();
+    }
   });
 });
 
@@ -622,6 +689,7 @@ async function carregarGastos() {
     atualizarFiltroBancos();
     renderizarTabela();
     atualizarResumo();
+    atualizarEstatisticas();
   } catch (err) {
     console.error(err);
     emptyStateEl.textContent = 'Erro ao carregar dados. Tente novamente.';
@@ -766,9 +834,15 @@ formConta.addEventListener('submit', async (e) => {
   e.preventDefault();
   const displayName = contaNome.value.trim();
   const phone = contaTelefone.value.trim();
+  const rendaMensalBase = parseFloat(String(contaRendaBase.value || '0').replace(',', '.'));
 
   if (!displayName) {
     mostrarFeedbackEl(contaFeedback, 'error', 'Informe um nome exibido.');
+    return;
+  }
+
+  if (isNaN(rendaMensalBase) || rendaMensalBase < 0) {
+    mostrarFeedbackEl(contaFeedback, 'error', 'Renda mensal base inválida.');
     return;
   }
 
@@ -780,7 +854,7 @@ formConta.addEventListener('submit', async (e) => {
     const res = await fetch(`${API_URL}/auth/profile`, {
       method: 'PATCH',
       headers: authHeaders(),
-      body: JSON.stringify({ displayName, phone }),
+      body: JSON.stringify({ displayName, phone, rendaMensalBase }),
     });
     if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
     const data = await res.json();
@@ -792,12 +866,100 @@ formConta.addEventListener('submit', async (e) => {
       name: currentProfile.displayName || currentUser?.name,
       picture: currentProfile.pictureUrl || currentUser?.picture,
     });
+    await carregarRendaGeralControle();
+    atualizarResumo();
+    atualizarEstatisticas();
     mostrarFeedbackEl(contaFeedback, 'success', 'Dados da conta atualizados com sucesso.');
   } catch (err) {
     mostrarFeedbackEl(contaFeedback, 'error', err.message);
   } finally {
     btnContaSalvar.disabled = false;
     btnContaSalvar.textContent = 'Salvar alterações';
+  }
+});
+
+function renderRendasExtras() {
+  if (!listaRendaExtra) return;
+  if (!currentRendasExtras.length) {
+    listaRendaExtra.innerHTML = '<p class="empty-state-inline">Nenhuma renda extra cadastrada neste mês.</p>';
+    return;
+  }
+
+  const listaOrdenada = [...currentRendasExtras].sort((a, b) => new Date(b.dataReferencia) - new Date(a.dataReferencia));
+  listaRendaExtra.innerHTML = listaOrdenada.map((item) => `
+    <div class="renda-extra-item">
+      <div>
+        <div class="renda-extra-titulo">${escapeHtml(item.descricao || 'Renda extra')}</div>
+        <div class="renda-extra-meta">${formatarData(item.dataReferencia)} • ${formatarValor(item.valor)}</div>
+      </div>
+      <button class="btn btn-outline btn-sm btn-remover-renda-extra" data-id="${escapeHtml(item.id)}">Remover</button>
+    </div>
+  `).join('');
+
+  listaRendaExtra.querySelectorAll('.btn-remover-renda-extra').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!confirm('Remover esta renda extra?')) return;
+      try {
+        const res = await fetch(`${API_URL}/auth/renda-extras/${encodeURIComponent(button.dataset.id)}`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        });
+        if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao remover renda extra');
+        await carregarRendasExtras();
+        await carregarRendaGeralControle();
+        atualizarResumo();
+        atualizarEstatisticas();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+}
+
+formRendaExtra.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  rendaExtraFeedback.classList.add('hidden');
+
+  const valor = parseFloat(String(rendaExtraValor.value || '').replace(',', '.'));
+  const dataReferencia = rendaExtraData.value;
+  const descricao = rendaExtraDesc.value.trim();
+
+  if (isNaN(valor) || valor <= 0) {
+    mostrarFeedbackEl(rendaExtraFeedback, 'error', 'Informe um valor válido para renda extra.');
+    return;
+  }
+
+  if (!dataReferencia) {
+    mostrarFeedbackEl(rendaExtraFeedback, 'error', 'Informe a data da renda extra.');
+    return;
+  }
+
+  btnRendaExtra.disabled = true;
+  btnRendaExtra.textContent = 'Salvando...';
+
+  try {
+    const res = await fetch(`${API_URL}/auth/renda-extras`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ valor, descricao, dataReferencia }),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao salvar renda extra');
+    mostrarFeedbackEl(rendaExtraFeedback, 'success', 'Renda extra adicionada com sucesso.');
+    formRendaExtra.reset();
+    rendaExtraData.valueAsDate = new Date();
+    await carregarRendasExtras();
+    await carregarRendaGeralControle();
+    atualizarResumo();
+    atualizarEstatisticas();
+  } catch (err) {
+    mostrarFeedbackEl(rendaExtraFeedback, 'error', err.message);
+  } finally {
+    btnRendaExtra.disabled = false;
+    btnRendaExtra.textContent = 'Adicionar renda extra';
   }
 });
 
@@ -891,7 +1053,161 @@ function atualizarResumo() {
   document.getElementById('total-gastos').textContent        = formatarValor(totalGastos);
   document.getElementById('total-investimentos').textContent = formatarValor(totalInvestimentos);
   document.getElementById('total-lancamentos').textContent   = lista.length;
+
+  const rendaGeral = parseFloat(rendaGeralAtual?.rendaGeralMes || 0) || 0;
+  const saldo = rendaGeral - totalGastos;
+  const percentual = rendaGeral > 0 ? (totalGastos / rendaGeral) * 100 : 0;
+  const saldoEl = document.getElementById('total-saldo-geral');
+
+  document.getElementById('total-renda-geral').textContent = formatarValor(rendaGeral);
+  document.getElementById('percentual-gasto-renda').textContent = `${percentual.toFixed(1)}%`;
+  saldoEl.textContent = formatarValor(saldo);
+  saldoEl.classList.toggle('expense', saldo < 0);
+  saldoEl.classList.toggle('investment', saldo >= 0);
 }
+
+function inicioFimMesAtual() {
+  const now = new Date();
+  const inicio = new Date(now.getFullYear(), now.getMonth(), 1);
+  const fim = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { inicio, fim };
+}
+
+function gastosMesAtualPorFiltroCartao() {
+  const { inicio, fim } = inicioFimMesAtual();
+  const cartaoSelecionado = estatCartao?.value || '';
+  return gastos.filter((item) => {
+    const data = new Date(item.data);
+    if (isNaN(data.getTime())) return false;
+    if (data < inicio || data > fim) return false;
+    if (item.tipo !== 'Gasto') return false;
+    if (cartaoSelecionado && item.cartaoId !== cartaoSelecionado) return false;
+    return true;
+  });
+}
+
+function cicloFaturaAtual(cartao) {
+  const now = new Date();
+  const fechamento = Math.min(31, Math.max(1, parseInt(String(cartao?.diaFechamentoFatura || '1'), 10) || 1));
+
+  let inicio;
+  let fim;
+
+  if (now.getDate() > fechamento) {
+    inicio = new Date(now.getFullYear(), now.getMonth(), fechamento + 1);
+    fim = new Date(now.getFullYear(), now.getMonth() + 1, fechamento);
+  } else {
+    inicio = new Date(now.getFullYear(), now.getMonth() - 1, fechamento + 1);
+    fim = new Date(now.getFullYear(), now.getMonth(), fechamento);
+  }
+
+  return { inicio, fim };
+}
+
+function formatarDataCurta(date) {
+  return date.toLocaleDateString('pt-BR');
+}
+
+function renderTopCategorias(lista) {
+  if (!estatCategoriasLista) return;
+
+  const mapa = lista.reduce((acc, item) => {
+    const chave = item.categoria || 'Sem categoria';
+    acc[chave] = (acc[chave] || 0) + (parseFloat(item.valor || 0) || 0);
+    return acc;
+  }, {});
+
+  const top = Object.entries(mapa)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  if (top.length === 0) {
+    estatCategoriasLista.innerHTML = '<p class="empty-state-inline">Sem gastos para o período/filtro.</p>';
+    return;
+  }
+
+  estatCategoriasLista.innerHTML = top.map(([categoria, valor], idx) => `
+    <div class="categoria-item">
+      <span class="categoria-rank">#${idx + 1}</span>
+      <span class="categoria-nome">${escapeHtml(categoria)}</span>
+      <span class="categoria-valor">${formatarValor(valor)}</span>
+    </div>
+  `).join('');
+}
+
+function renderFaturasCartao() {
+  if (!estatFaturasLista) return;
+
+  const cartaoFiltro = estatCartao?.value || '';
+  const cartoesVisiveis = currentCartoes.filter((cartao) => !cartaoFiltro || cartao.id === cartaoFiltro);
+
+  if (cartoesVisiveis.length === 0) {
+    estatFaturasLista.innerHTML = '<p class="empty-state-inline">Nenhum cartão disponível para exibir fatura.</p>';
+    return;
+  }
+
+  estatFaturasLista.innerHTML = cartoesVisiveis.map((cartao) => {
+    const { inicio, fim } = cicloFaturaAtual(cartao);
+    const itens = gastos
+      .filter((item) => {
+        if (item.tipo !== 'Gasto') return false;
+        if (String(item.tipoPagamento || '').toLowerCase() !== 'credito') return false;
+        if (item.cartaoId !== cartao.id) return false;
+        const data = new Date(item.data);
+        if (isNaN(data.getTime())) return false;
+        return data >= inicio && data <= fim;
+      })
+      .sort((a, b) => new Date(a.data) - new Date(b.data));
+
+    const total = itens.reduce((sum, item) => sum + (parseFloat(item.valor || 0) || 0), 0);
+    const nomeCartao = `${cartao.cartaoNome}${cartao.finalCartao ? ` • *${cartao.finalCartao}` : ''}`;
+
+    return `
+      <article class="fatura-card">
+        <div class="fatura-header">
+          <div>
+            <h3>${escapeHtml(nomeCartao)}</h3>
+            <p>Fechamento dia ${escapeHtml(cartao.diaFechamentoFatura || '1')} • Ciclo ${formatarDataCurta(inicio)} a ${formatarDataCurta(fim)}</p>
+          </div>
+          <div class="fatura-total">${formatarValor(total)}</div>
+        </div>
+        <div class="fatura-itens">
+          ${itens.length === 0
+            ? '<p class="empty-state-inline">Nenhuma compra no crédito neste ciclo.</p>'
+            : itens.map((item) => `
+                <div class="fatura-item">
+                  <span>${escapeHtml(item.descricao || item.categoria || 'Compra')}</span>
+                  <span>${formatarData(item.data)}</span>
+                  <strong>${formatarValor(item.valor)}</strong>
+                </div>
+              `).join('')}
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function atualizarEstatisticas() {
+  if (!estatGastoGeral || !estatRendaGeral) return;
+
+  const lista = gastosMesAtualPorFiltroCartao();
+  const gastoGeral = lista.reduce((sum, item) => sum + (parseFloat(item.valor || 0) || 0), 0);
+  const rendaGeral = parseFloat(rendaGeralAtual?.rendaGeralMes || 0) || 0;
+  const diferenca = rendaGeral - gastoGeral;
+  const percentual = rendaGeral > 0 ? (gastoGeral / rendaGeral) * 100 : 0;
+
+  estatGastoGeral.textContent = formatarValor(gastoGeral);
+  estatRendaGeral.textContent = formatarValor(rendaGeral);
+  estatDiferenca.textContent = formatarValor(diferenca);
+  estatDiferenca.classList.toggle('expense', diferenca < 0);
+  estatDiferenca.classList.toggle('investment', diferenca >= 0);
+  estatPercentual.textContent = `${percentual.toFixed(1)}%`;
+
+  renderTopCategorias(lista);
+  renderFaturasCartao();
+}
+
+estatCartao?.addEventListener('change', atualizarEstatisticas);
 
 // ─── Dashboard: exclusão ─────────────────────────────────────────────────────
 function abrirModalDelete(id) {
@@ -1018,8 +1334,10 @@ function atualizarSeletoresCartao() {
   }));
   const cartaoSelect = document.getElementById('input-cartao');
   const impCartaoSelect = document.getElementById('imp-cartao');
+  const estatCartaoSelect = document.getElementById('estat-cartao');
   const prevVal1 = cartaoSelect?.value;
   const prevVal2 = impCartaoSelect?.value;
+  const prevVal3 = estatCartaoSelect?.value;
 
   if (cartaoSelect) {
     cartaoSelect.innerHTML = '<option value="">Selecione o cartão...</option>';
@@ -1041,6 +1359,17 @@ function atualizarSeletoresCartao() {
     });
     if (options.some((o) => o.value === prevVal2)) impCartaoSelect.value = prevVal2;
   }
+  if (estatCartaoSelect) {
+    estatCartaoSelect.innerHTML = '<option value="">Todos os cartões</option>';
+    options.forEach((o) => {
+      const el = document.createElement('option');
+      el.value = o.value;
+      el.textContent = o.label;
+      estatCartaoSelect.appendChild(el);
+    });
+    if (options.some((o) => o.value === prevVal3)) estatCartaoSelect.value = prevVal3;
+  }
+  atualizarEstatisticas();
 }
 
 function renderCartoes() {
@@ -1051,15 +1380,21 @@ function renderCartoes() {
     return;
   }
   lista.innerHTML = currentCartoes.map((c) => `
-    <div class="cartao-item" data-id="${escapeHtml(c.id)}">
-      <div class="cartao-info">
-        <span class="cartao-nome">${escapeHtml(c.cartaoNome)}${c.finalCartao ? ' <span class="cartao-final">*' + escapeHtml(c.finalCartao) + '</span>' : ''}</span>
-        <span class="cartao-banco">${escapeHtml(c.bancoNome)}</span>
-        <span class="cartao-tipo tag">${escapeHtml(c.tipoCartao)}</span>
-        ${c.bandeira ? `<span class="cartao-bandeira tag">${escapeHtml(c.bandeira)}</span>` : ''}
+    <article class="cartao-item" data-id="${escapeHtml(c.id)}">
+      <div class="cartao-info-main">
+        <div class="cartao-info">
+          <span class="cartao-nome">${escapeHtml(c.cartaoNome)}${c.finalCartao ? ' <span class="cartao-final">*' + escapeHtml(c.finalCartao) + '</span>' : ''}</span>
+          <span class="cartao-banco">${escapeHtml(c.bancoNome)}</span>
+        </div>
+        <div class="cartao-meta-row">
+          <span class="cartao-tipo tag">${escapeHtml(c.tipoCartao)}</span>
+          ${c.bandeira ? `<span class="cartao-bandeira tag">${escapeHtml(c.bandeira)}</span>` : ''}
+          <span class="tag tag-bank">Fecha dia ${escapeHtml(c.diaFechamentoFatura || '1')}</span>
+          ${c.diaVencimentoFatura ? `<span class="tag tag-member">Vence dia ${escapeHtml(c.diaVencimentoFatura)}</span>` : ''}
+        </div>
       </div>
       <button class="btn btn-danger btn-sm btn-remover-cartao" data-id="${escapeHtml(c.id)}">Remover</button>
-    </div>
+    </article>
   `).join('');
 
   lista.querySelectorAll('.btn-remover-cartao').forEach((btn) => {
@@ -1093,6 +1428,8 @@ document.getElementById('form-cartao').addEventListener('submit', async (e) => {
     finalCartao: document.getElementById('cartao-final').value.trim(),
     bandeira:    document.getElementById('cartao-bandeira').value,
     tipoCartao:  document.getElementById('cartao-tipo').value,
+    diaFechamentoFatura: document.getElementById('cartao-fechamento').value,
+    diaVencimentoFatura: document.getElementById('cartao-vencimento').value,
   };
 
   try {
@@ -1139,15 +1476,19 @@ function renderComprasParceladas() {
     const cartao = currentCartoes.find((k) => k.id === c.cartaoId);
     const cartaoLabel = cartao ? `${escapeHtml(cartao.cartaoNome)} (${escapeHtml(cartao.bancoNome)})` : escapeHtml(c.cartaoId);
     return `
-    <div class="compra-item">
+    <article class="compra-item">
       <div class="compra-info">
         <span class="compra-nome">${escapeHtml(c.descricao)}</span>
         <span class="compra-cartao">${cartaoLabel}</span>
-        <span class="compra-parcela tag">${escapeHtml(String(c.parcelaAtual))}/${escapeHtml(String(c.totalParcelas))} parcelas</span>
+        <div class="compra-meta-row">
+          <span class="compra-parcela tag">${escapeHtml(String(c.parcelaAtual))}/${escapeHtml(String(c.totalParcelas))} parcelas</span>
+          <span class="tag tag-bank">${escapeHtml(c.categoria || 'Categoria')}</span>
+          <span class="tag tag-member">${escapeHtml(getMemberLabel(c.responsavel))}</span>
+        </div>
         <span class="compra-valor">${formatarValor(c.valorParcela)}/mês</span>
       </div>
       <span class="tag tag-status-${(c.status || 'ativa').toLowerCase()}">${escapeHtml(c.status || 'ativa')}</span>
-    </div>
+    </article>
     `;
   }).join('');
 }

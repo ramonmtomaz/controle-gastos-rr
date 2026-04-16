@@ -69,6 +69,7 @@
     <main class="container">
       <section class="card dashboard-menu" id="dashboard-menu">
         <button class="dashboard-menu-btn is-active" data-area="resumo">Resumo</button>
+        <button class="dashboard-menu-btn" data-area="estatisticas">Estatísticas</button>
         <button class="dashboard-menu-btn" data-area="lancar">Lançar gasto</button>
         <button class="dashboard-menu-btn" data-area="investimento">Lançar investimento</button>
         <button class="dashboard-menu-btn" data-area="lancamentos">Lançamentos</button>
@@ -90,7 +91,62 @@
             <span class="summary-label">Lançamentos</span>
             <span class="summary-value" id="total-lancamentos">0</span>
           </div>
+          <div class="card summary-card">
+            <span class="summary-label">Renda Geral (mês)</span>
+            <span class="summary-value investment" id="total-renda-geral">R$ 0,00</span>
+          </div>
+          <div class="card summary-card">
+            <span class="summary-label">Saldo (Renda - Gastos)</span>
+            <span class="summary-value" id="total-saldo-geral">R$ 0,00</span>
+          </div>
+          <div class="card summary-card">
+            <span class="summary-label">Comprometimento da renda</span>
+            <span class="summary-value" id="percentual-gasto-renda">0%</span>
+          </div>
         </div>
+      </section>
+
+      <section class="dashboard-area hidden" id="area-estatisticas">
+        <section class="card estatisticas-top">
+          <div class="estatisticas-head">
+            <h2>Estatísticas do mês atual</h2>
+            <div class="estatisticas-filtros">
+              <label for="estat-cartao">Filtro por cartão</label>
+              <select id="estat-cartao" class="filter-input">
+                <option value="">Todos os cartões</option>
+              </select>
+            </div>
+          </div>
+          <div class="summary-cards">
+            <div class="card summary-card">
+              <span class="summary-label">Gasto geral</span>
+              <span class="summary-value expense" id="estat-gasto-geral">R$ 0,00</span>
+            </div>
+            <div class="card summary-card">
+              <span class="summary-label">Renda geral</span>
+              <span class="summary-value investment" id="estat-renda-geral">R$ 0,00</span>
+            </div>
+            <div class="card summary-card">
+              <span class="summary-label">Diferença</span>
+              <span class="summary-value" id="estat-diferenca">R$ 0,00</span>
+            </div>
+            <div class="card summary-card">
+              <span class="summary-label">Percentual gasto/renda</span>
+              <span class="summary-value" id="estat-percentual">0%</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card estatisticas-faturas">
+          <h2>Fatura por cartão</h2>
+          <p class="section-subtitle">Toda compra no crédito entra na fatura do cartão conforme dia de fechamento.</p>
+          <div id="estat-faturas-lista" class="faturas-lista"></div>
+        </section>
+
+        <section class="card estatisticas-categorias">
+          <h2>Top categorias de gasto</h2>
+          <div id="estat-categorias-lista" class="categorias-lista"></div>
+        </section>
       </section>
 
       <section class="dashboard-area hidden" id="area-lancar">
@@ -327,6 +383,14 @@
                 <option value="ambos">Crédito e Débito</option>
               </select>
             </div>
+            <div class="form-group">
+              <label for="cartao-fechamento">Dia de fechamento *</label>
+              <input type="number" id="cartao-fechamento" min="1" max="31" required placeholder="Ex: 20" />
+            </div>
+            <div class="form-group">
+              <label for="cartao-vencimento">Dia de vencimento</label>
+              <input type="number" id="cartao-vencimento" min="1" max="31" placeholder="Ex: 30" />
+            </div>
             <div class="form-actions form-group">
               <div id="cartao-feedback" class="feedback hidden"></div>
               <button type="submit" class="btn btn-primary">+ Adicionar cartão</button>
@@ -423,6 +487,10 @@
               <label for="conta-telefone">Telefone</label>
               <input type="text" id="conta-telefone" maxlength="25" placeholder="(00) 00000-0000" />
             </div>
+            <div class="form-group">
+              <label for="conta-renda-base">Renda mensal base (R$)</label>
+              <input type="number" id="conta-renda-base" step="0.01" min="0" placeholder="0,00" />
+            </div>
             <div class="form-group form-group-full">
               <label for="conta-foto">Foto do Google</label>
               <input type="text" id="conta-foto" readonly />
@@ -432,6 +500,29 @@
               <button type="submit" id="btn-conta-salvar" class="btn btn-primary">Salvar alterações</button>
             </div>
           </form>
+
+          <div class="renda-extra-box">
+            <h3>Renda extra eventual</h3>
+            <form id="form-renda-extra" class="form-grid">
+              <div class="form-group">
+                <label for="renda-extra-valor">Valor (R$) *</label>
+                <input type="number" id="renda-extra-valor" step="0.01" min="0.01" required />
+              </div>
+              <div class="form-group">
+                <label for="renda-extra-data">Data *</label>
+                <input type="date" id="renda-extra-data" required />
+              </div>
+              <div class="form-group form-group-full">
+                <label for="renda-extra-desc">Descrição</label>
+                <input type="text" id="renda-extra-desc" maxlength="200" placeholder="Ex: Freela do mês" />
+              </div>
+              <div class="form-actions form-group-full">
+                <div id="renda-extra-feedback" class="feedback hidden"></div>
+                <button type="submit" id="btn-renda-extra" class="btn btn-primary">Adicionar renda extra</button>
+              </div>
+            </form>
+            <div id="lista-renda-extra" class="renda-extra-lista"></div>
+          </div>
         </section>
       </section>
 
