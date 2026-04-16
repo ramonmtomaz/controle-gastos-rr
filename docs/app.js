@@ -28,9 +28,11 @@ let currentControleNome = null;
 let currentControleOwnerEmail = null;
 let currentUser         = null; // { email, name, picture }
 let currentCartoes      = [];
+let currentControleCartoes = [];
 let currentComprasParceladas = [];
 let currentRendasExtras = [];
 let rendaGeralAtual = null;
+let currentSugestoesParcelamento = [];
 
 // ─── Elementos: comuns ────────────────────────────────────────────────────────
 const loginScreen = document.getElementById('login-screen');
@@ -83,6 +85,8 @@ const loadingEl      = document.getElementById('loading');
 const emptyStateEl   = document.getElementById('empty-state');
 const filterSearch   = document.getElementById('filter-search');
 const filterTipo     = document.getElementById('filter-tipo');
+const filterPagamento = document.getElementById('filter-pagamento');
+const filterCategoria = document.getElementById('filter-categoria');
 const filterResp     = document.getElementById('filter-responsavel');
 const filterBanco    = document.getElementById('filter-banco');
 const modalConfirm   = document.getElementById('modal-confirm');
@@ -124,6 +128,19 @@ const estatDiferenca = document.getElementById('estat-diferenca');
 const estatPercentual = document.getElementById('estat-percentual');
 const estatFaturasLista = document.getElementById('estat-faturas-lista');
 const estatCategoriasLista = document.getElementById('estat-categorias-lista');
+const resumoBancosTotal = document.getElementById('resumo-bancos-total');
+const resumoBancosList = document.getElementById('resumo-bancos-list');
+const resumoCartoesTotal = document.getElementById('resumo-cartoes-total');
+const resumoCartoesUsage = document.getElementById('resumo-cartoes-usage');
+const resumoCartoesLimit = document.getElementById('resumo-cartoes-limit');
+const resumoCartoesBar = document.getElementById('resumo-cartoes-bar');
+const resumoCartoesList = document.getElementById('resumo-cartoes-list');
+const resumoInvestTotal = document.getElementById('resumo-invest-total');
+const resumoInvestList = document.getElementById('resumo-invest-list');
+const resumoEvolucaoTotal = document.getElementById('resumo-evolucao-total');
+const resumoEvolucaoSvg = document.getElementById('resumo-evolucao-svg');
+const resumoEvolucaoLabelStart = document.getElementById('resumo-evolucao-label-start');
+const resumoEvolucaoLabelEnd = document.getElementById('resumo-evolucao-label-end');
 
 // ─── Elementos: Pluggy ───────────────────────────────────────────────────────────
 const btnImportarBanco  = document.getElementById('btn-importar-banco');
@@ -135,6 +152,7 @@ const pluggyResponsavel = document.getElementById('pluggy-responsavel');
 const pluggyItemsList   = document.getElementById('pluggy-items-list');
 const pluggyItemsCount  = document.getElementById('pluggy-items-count');
 const pluggyFeedback    = document.getElementById('pluggy-feedback');
+const pluggyIncluirCredito = document.getElementById('pluggy-incluir-credito');
 const btnPluggyConectar = document.getElementById('btn-pluggy-conectar');
 const btnPluggyCancelar  = document.getElementById('btn-pluggy-cancelar');
 const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
@@ -313,9 +331,11 @@ function voltarLobby() {
   currentPluggyItems = [];
   currentProfile = null;
   currentCartoes = [];
+  currentControleCartoes = [];
   currentComprasParceladas = [];
   currentRendasExtras = [];
   rendaGeralAtual = null;
+  currentSugestoesParcelamento = [];
   setDashboardArea('resumo');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
@@ -649,12 +669,16 @@ async function abrirControle(id, nome, ownerEmail) {
   document.getElementById('input-data').valueAsDate = new Date();
   document.getElementById('inv-data').valueAsDate = new Date();
   rendaExtraData.valueAsDate = new Date();
+  currentSugestoesParcelamento = [];
+  renderSugestoesParcelamento();
   try {
     await carregarResponsaveis();
     await carregarPerfilConta();
     await carregarRendasExtras();
     await carregarCartoes();
+    await carregarCartoesControleResumo();
     await sincronizarCartoesPluggy(false);
+    await carregarCartoesControleResumo();
     await carregarComprasParceladas();
     await carregarGastos();
     await carregarRendaGeralControle();
@@ -689,6 +713,7 @@ async function carregarGastos() {
     if (!res.ok) throw new Error('Erro ao buscar dados');
     gastos = await res.json();
     atualizarFiltroBancos();
+    atualizarFiltroCategorias();
     renderizarTabela();
     atualizarResumo();
     atualizarEstatisticas();
@@ -698,6 +723,20 @@ async function carregarGastos() {
     emptyStateEl.classList.remove('hidden');
   } finally {
     loadingEl.classList.add('hidden');
+  }
+}
+
+async function carregarCartoesControleResumo() {
+  if (!currentControleId) return;
+  try {
+    const res = await fetch(`${API_URL}/controles/${currentControleId}/cartoes`, { headers: authHeaders() });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar cartões do controle');
+    currentControleCartoes = await res.json();
+    atualizarSeletoresCartao();
+  } catch (err) {
+    currentControleCartoes = [];
+    console.warn('Erro ao carregar cartões do controle:', err.message);
   }
 }
 
@@ -711,10 +750,12 @@ formGasto.addEventListener('submit', async (e) => {
   esconderFeedback();
 
   const tipoPagamento = document.getElementById('input-tipo-pagamento').value;
+  const tipoLancamento = normalizarTipoLancamento(document.getElementById('input-tipo-lancamento')?.value || 'Saida');
+  const isSaidaLancamento = tipoLancamento === 'Saida';
   const parcelasEl   = document.getElementById('input-parcelas');
   const cartaoEl     = document.getElementById('input-cartao');
-  const totalParcelas = tipoPagamento === 'credito' ? parseInt(parcelasEl.value || '1', 10) : 1;
-  const cartaoId   = (tipoPagamento === 'credito' || tipoPagamento === 'debito') ? cartaoEl.value : '';
+  const totalParcelas = (isSaidaLancamento && tipoPagamento === 'credito') ? parseInt(parcelasEl.value || '1', 10) : 1;
+  const cartaoId   = (isSaidaLancamento && (tipoPagamento === 'credito' || tipoPagamento === 'debito')) ? cartaoEl.value : '';
   const cartaoSelecionado = currentCartoes.find((c) => c.id === cartaoId);
 
   const dataVal     = document.getElementById('input-data').value;
@@ -723,7 +764,7 @@ formGasto.addEventListener('submit', async (e) => {
   const descricaoVal = document.getElementById('input-descricao').value;
   const responsavelVal = document.getElementById('input-responsavel').value;
 
-  if ((tipoPagamento === 'credito' || tipoPagamento === 'debito') && !cartaoId) {
+  if (isSaidaLancamento && (tipoPagamento === 'credito' || tipoPagamento === 'debito') && !cartaoId) {
     mostrarFeedback('error', 'Selecione o cartão para pagamento com crédito ou débito.');
     btnSubmit.disabled = false;
     btnSubmit.textContent = 'Adicionar';
@@ -731,7 +772,7 @@ formGasto.addEventListener('submit', async (e) => {
   }
 
   try {
-    if (tipoPagamento === 'credito' && totalParcelas > 1) {
+    if (isSaidaLancamento && tipoPagamento === 'credito' && totalParcelas > 1) {
       // Deleganda para compras parceladas — cria compra + parcelas futuras
       const res = await fetch(`${API_URL}/compras-parceladas`, {
         method: 'POST',
@@ -761,7 +802,7 @@ formGasto.addEventListener('submit', async (e) => {
       const payload = {
         data: dataVal,
         valor: valorVal,
-        tipo: 'Gasto',
+        tipo: tipoLancamento,
         categoria: categoriaVal,
         descricao: descricaoVal,
         responsavel: responsavelVal,
@@ -794,25 +835,33 @@ formGasto.addEventListener('submit', async (e) => {
   }
 });
 
-// Tipo de pagamento → mostrar/ocultar cartão e parcelamento
-document.getElementById('input-tipo-pagamento').addEventListener('change', function () {
-  const tipo = this.value;
+function atualizarVisibilidadeCartaoParcelamento() {
+  const tipoPagamento = document.getElementById('input-tipo-pagamento').value;
+  const tipoLancamento = normalizarTipoLancamento(document.getElementById('input-tipo-lancamento')?.value || 'Saida');
+  const isSaidaLancamento = tipoLancamento === 'Saida';
   const grupoCartao = document.getElementById('grupo-cartao');
   const grupoParcelamento = document.getElementById('grupo-parcelamento');
-  if (tipo === 'credito' || tipo === 'debito') {
+
+  if (isSaidaLancamento && (tipoPagamento === 'credito' || tipoPagamento === 'debito')) {
     grupoCartao.style.display = '';
   } else {
     grupoCartao.style.display = 'none';
     document.getElementById('input-cartao').value = '';
   }
-  if (tipo === 'credito') {
+
+  if (isSaidaLancamento && tipoPagamento === 'credito') {
     grupoParcelamento.classList.remove('hidden');
   } else {
     grupoParcelamento.classList.add('hidden');
     document.getElementById('input-parcelas').value = '1';
   }
+
   atualizarPreviewParcela();
-});
+}
+
+// Tipo e pagamento → mostrar/ocultar cartão e parcelamento
+document.getElementById('input-tipo-pagamento').addEventListener('change', atualizarVisibilidadeCartaoParcelamento);
+document.getElementById('input-tipo-lancamento')?.addEventListener('change', atualizarVisibilidadeCartaoParcelamento);
 
 function atualizarPreviewParcela() {
   const valor = parseFloat(document.getElementById('input-valor').value || '0');
@@ -973,20 +1022,69 @@ function mostrarFeedback(tipo, msg) {
 }
 function esconderFeedback() { formFeedback.classList.add('hidden'); }
 
+function normalizarTipoLancamento(tipo) {
+  const raw = String(tipo || '').trim().toLowerCase();
+  if (raw === 'gasto' || raw === 'saida' || raw === 'saída') return 'Saida';
+  if (raw === 'entrada') return 'Entrada';
+  if (raw === 'investimento') return 'Investimento';
+  return 'Saida';
+}
+
+function isTipoSaida(tipo) {
+  return normalizarTipoLancamento(tipo) === 'Saida';
+}
+
+function classeValorPorTipo(tipo) {
+  const tipoNorm = normalizarTipoLancamento(tipo);
+  if (tipoNorm === 'Saida') return 'valor-gasto';
+  return 'valor-investimento';
+}
+
+function labelTipoLancamento(tipo) {
+  return normalizarTipoLancamento(tipo);
+}
+
+function atualizarFiltroCategorias() {
+  if (!filterCategoria) return;
+  const previousValue = filterCategoria.value;
+  const categorias = Array.from(new Set(
+    gastos.map((gasto) => String(gasto.categoria || '').trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  filterCategoria.innerHTML = '<option value="">Todas categorias</option>';
+  categorias.forEach((categoria) => {
+    const option = document.createElement('option');
+    option.value = categoria;
+    option.textContent = categoria;
+    filterCategoria.appendChild(option);
+  });
+
+  if (categorias.includes(previousValue)) {
+    filterCategoria.value = previousValue;
+  }
+}
+
 // ─── Dashboard: tabela ────────────────────────────────────────────────────────
 function gastosFiltrados() {
   const busca = filterSearch.value.toLowerCase();
   const tipo  = filterTipo.value;
+  const pagamento = filterPagamento?.value || '';
+  const categoriaFiltro = filterCategoria?.value || '';
   const resp  = filterResp.value;
   const banco = filterBanco.value;
   return gastos.filter((g) => {
-    if (tipo && g.tipo !== tipo) return false;
+    const tipoNorm = normalizarTipoLancamento(g.tipo);
+    if (tipo && tipoNorm !== tipo) return false;
+    if (pagamento && String(g.tipoPagamento || '').toLowerCase() !== pagamento) return false;
+    if (categoriaFiltro && String(g.categoria || '') !== categoriaFiltro) return false;
     if (resp && g.responsavel !== resp) return false;
     if (banco && (g.banco || 'Manual') !== banco) return false;
     if (busca) {
       return (
         (g.descricao || '').toLowerCase().includes(busca) ||
         (g.categoria || '').toLowerCase().includes(busca) ||
+        tipoNorm.toLowerCase().includes(busca) ||
+        (g.tipoPagamento || '').toLowerCase().includes(busca) ||
         getMemberLabel(g.responsavel).toLowerCase().includes(busca) ||
         (g.banco || 'Manual').toLowerCase().includes(busca)
       );
@@ -995,8 +1093,10 @@ function gastosFiltrados() {
   });
 }
 
-[filterSearch, filterTipo, filterResp, filterBanco].forEach((el) =>
-  el.addEventListener('input', () => { renderizarTabela(); atualizarResumo(); })
+[filterSearch, filterTipo, filterPagamento, filterCategoria, filterResp, filterBanco].forEach((el) =>
+  el && ['input', 'change'].forEach((eventName) => {
+    el.addEventListener(eventName, () => { renderizarTabela(); atualizarResumo(); });
+  })
 );
 
 function renderizarTabela() {
@@ -1013,29 +1113,35 @@ function renderizarTabela() {
   lista.sort((a, b) => new Date(b.data) - new Date(a.data));
 
   lista.forEach((g) => {
+    const tipoNorm = labelTipoLancamento(g.tipo);
     const responsavelLabel = getMemberLabel(g.responsavel);
     const bancoLabel = g.banco || 'Manual';
     const parcelaLabel = g.numParcela && g.totalParcelas && g.totalParcelas > 1
       ? `${g.numParcela}/${g.totalParcelas}` : '';
-    const tipoPagLabel = g.tipoPagamento ? g.tipoPagamento.charAt(0).toUpperCase() + g.tipoPagamento.slice(1) : '';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td data-label="Data">${formatarData(g.data)}</td>
-      <td data-label="Tipo"><span class="tag tag-${g.tipo.toLowerCase()}">${escapeHtml(g.tipo)}</span></td>
-      <td data-label="Pagamento">${tipoPagLabel ? `<span class="tag tag-pagamento">${escapeHtml(tipoPagLabel)}</span>` : '—'}</td>
-      <td data-label="Categoria">${escapeHtml(g.categoria)}</td>
-      <td data-label="Descrição">${escapeHtml(g.descricao) || '—'}</td>
-      <td data-label="Banco"><span class="tag tag-bank">${escapeHtml(bancoLabel)}</span></td>
-      <td data-label="Parcela">${parcelaLabel ? `<span class="tag tag-parcela">${escapeHtml(parcelaLabel)}</span>` : '—'}</td>
-      <td data-label="Responsável"><span class="tag tag-member">${escapeHtml(responsavelLabel)}</span></td>
-      <td data-label="Valor" class="text-right ${g.tipo === 'Gasto' ? 'valor-gasto' : 'valor-investimento'}">
-        ${formatarValor(g.valor)}
-      </td>
-      <td class="td-action">
-        <button class="btn-delete" data-id="${escapeHtml(g.id)}" title="Remover">🗑</button>
-      </td>
+    const tipoPagLabel = g.tipoPagamento ? g.tipoPagamento.charAt(0).toUpperCase() + g.tipoPagamento.slice(1) : 'Não informado';
+    const card = document.createElement('article');
+    card.className = 'lancamento-card';
+    card.innerHTML = `
+      <div class="lancamento-card-head">
+        <div>
+          <div class="lancamento-card-title">${escapeHtml(g.descricao || g.categoria || 'Lançamento')}</div>
+          <div class="lancamento-card-date">${formatarData(g.data)}</div>
+        </div>
+        <div class="lancamento-card-valor ${classeValorPorTipo(tipoNorm)}">${formatarValor(g.valor)}</div>
+      </div>
+      <div class="lancamento-card-tags">
+        <span class="tag tag-${tipoNorm.toLowerCase()}">${escapeHtml(tipoNorm)}</span>
+        <span class="tag tag-pagamento">${escapeHtml(tipoPagLabel)}</span>
+        <span class="tag tag-bank">${escapeHtml(g.categoria || 'Sem categoria')}</span>
+        <span class="tag tag-member">${escapeHtml(responsavelLabel)}</span>
+        <span class="tag tag-bank">${escapeHtml(bancoLabel)}</span>
+        ${parcelaLabel ? `<span class="tag tag-parcela">${escapeHtml(parcelaLabel)} parcelas</span>` : ''}
+      </div>
+      <div class="lancamento-card-actions">
+        <button class="btn btn-outline btn-sm btn-delete" data-id="${escapeHtml(g.id)}" title="Remover">Remover</button>
+      </div>
     `;
-    tbodyGastos.appendChild(tr);
+    tbodyGastos.appendChild(card);
   });
 
   tbodyGastos.querySelectorAll('.btn-delete').forEach((btn) => {
@@ -1044,9 +1150,9 @@ function renderizarTabela() {
 }
 
 function atualizarResumo() {
-  const lista = gastosFiltrados();
+  const lista = gastos;
   const totalGastos = lista
-    .filter((g) => g.tipo === 'Gasto')
+    .filter((g) => isTipoSaida(g.tipo))
     .reduce((acc, g) => acc + parseFloat(g.valor || 0), 0);
   const totalInvestimentos = lista
     .filter((g) => g.tipo === 'Investimento')
@@ -1066,6 +1172,200 @@ function atualizarResumo() {
   saldoEl.textContent = formatarValor(saldo);
   saldoEl.classList.toggle('expense', saldo < 0);
   saldoEl.classList.toggle('investment', saldo >= 0);
+
+  renderResumoDashboard(rendaGeral);
+}
+
+function chaveMes(date) {
+  const mes = String(date.getMonth() + 1).padStart(2, '0');
+  return `${date.getFullYear()}-${mes}`;
+}
+
+function formatarMesAno(chave) {
+  const [ano, mes] = String(chave).split('-');
+  return `${mes}/${ano}`;
+}
+
+function dataValida(iso) {
+  const d = new Date(iso);
+  return !isNaN(d.getTime());
+}
+
+function renderResumoDashboard(rendaGeral) {
+  if (!resumoBancosList) return;
+
+  const agora = new Date();
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0);
+  const lancamentosMes = gastos.filter((item) => {
+    if (!dataValida(item.data)) return false;
+    const data = new Date(item.data);
+    return data >= inicioMes && data <= fimMes;
+  });
+
+  const mapaBancos = {};
+  lancamentosMes.forEach((item) => {
+    const banco = (item.banco || '').trim();
+    if (!banco || banco.toLowerCase() === 'manual') return;
+    const valor = parseFloat(item.valor || 0) || 0;
+    const tipoNorm = normalizarTipoLancamento(item.tipo);
+    const delta = tipoNorm === 'Saida' ? -valor : valor;
+    mapaBancos[banco] = (mapaBancos[banco] || 0) + delta;
+  });
+
+  const bancos = Object.entries(mapaBancos)
+    .map(([nome, total]) => ({ nome, total }))
+    .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+
+  const totalBancos = bancos.reduce((acc, item) => acc + item.total, 0);
+  resumoBancosTotal.textContent = formatarValor(totalBancos);
+  resumoBancosTotal.classList.toggle('investment', totalBancos >= 0);
+  resumoBancosTotal.classList.toggle('expense', totalBancos < 0);
+  resumoBancosList.innerHTML = bancos.length === 0
+    ? '<p class="resumo-empty">Conecte bancos no Pluggy para ver o detalhamento.</p>'
+    : bancos.slice(0, 5).map((item) => `
+      <div class="resumo-list-item">
+        <span>${escapeHtml(item.nome)}</span>
+        <strong class="${item.total >= 0 ? 'investment' : 'expense'}">${formatarValor(item.total)}</strong>
+      </div>
+    `).join('');
+
+  const cartoesBase = currentControleCartoes.length ? currentControleCartoes : currentCartoes;
+  const cartoesComFatura = cartoesBase.map((cartao) => {
+    const { inicio, fim } = cicloFaturaAtual(cartao);
+    const total = gastos
+      .filter((item) => {
+        if (!isTipoSaida(item.tipo)) return false;
+        if (String(item.tipoPagamento || '').toLowerCase() !== 'credito') return false;
+        if (item.cartaoId !== cartao.id) return false;
+        if (!dataValida(item.data)) return false;
+        const data = new Date(item.data);
+        return data >= inicio && data <= fim;
+      })
+      .reduce((sum, item) => sum + (parseFloat(item.valor || 0) || 0), 0);
+
+    return {
+      id: cartao.id,
+      nome: cartao.cartaoNome || 'Cartão',
+      final: cartao.finalCartao || '',
+      ownerLabel: cartao.ownerLabel || getMemberLabel(cartao.userEmail) || 'Membro',
+      fechamento: cartao.diaFechamentoFatura || '1',
+      total,
+    };
+  });
+
+  const totalCartoes = cartoesComFatura.reduce((acc, item) => acc + item.total, 0);
+  const metaCartoes = Math.max((rendaGeral || 0) * 0.6, totalCartoes * 1.15, 1000);
+  const usoPercentual = metaCartoes > 0 ? Math.min(100, (totalCartoes / metaCartoes) * 100) : 0;
+
+  resumoCartoesTotal.textContent = formatarValor(totalCartoes);
+  resumoCartoesUsage.textContent = `${usoPercentual.toFixed(0)}% utilizado`;
+  resumoCartoesLimit.textContent = `Meta: ${formatarValor(metaCartoes)}`;
+  resumoCartoesBar.style.width = `${usoPercentual.toFixed(1)}%`;
+  resumoCartoesList.innerHTML = cartoesComFatura.length === 0
+    ? '<p class="resumo-empty">Nenhum cartão cadastrado.</p>'
+    : cartoesComFatura
+      .sort((a, b) => b.total - a.total)
+      .map((item) => `
+        <article class="resumo-fatura-card">
+          <div class="resumo-fatura-top">
+            <div>
+              <div class="resumo-fatura-nome">${escapeHtml(item.nome)} ${item.final ? `<small>• ${escapeHtml(item.final)}</small>` : ''}</div>
+              <div class="resumo-fatura-meta">Dono: ${escapeHtml(item.ownerLabel)} • Fecha dia ${escapeHtml(String(item.fechamento))}</div>
+            </div>
+            <strong class="expense">${formatarValor(item.total)}</strong>
+          </div>
+        </article>
+      `).join('');
+
+  const mapaInvest = {};
+  lancamentosMes
+    .filter((item) => item.tipo === 'Investimento')
+    .forEach((item) => {
+      const categoria = item.categoria || 'Sem categoria';
+      mapaInvest[categoria] = (mapaInvest[categoria] || 0) + (parseFloat(item.valor || 0) || 0);
+    });
+
+  const investimentos = Object.entries(mapaInvest)
+    .map(([nome, total]) => ({ nome, total }))
+    .sort((a, b) => b.total - a.total);
+  const totalInvest = investimentos.reduce((acc, item) => acc + item.total, 0);
+
+  resumoInvestTotal.textContent = formatarValor(totalInvest);
+  resumoInvestList.innerHTML = investimentos.length === 0
+    ? '<p class="resumo-empty">Sem investimentos neste mês.</p>'
+    : investimentos.map((item) => `
+      <div class="resumo-list-item">
+        <span>${escapeHtml(item.nome)}</span>
+        <strong class="investment">${formatarValor(item.total)}</strong>
+      </div>
+    `).join('');
+
+  const meses = [];
+  for (let i = 11; i >= 0; i -= 1) {
+    const data = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+    meses.push(chaveMes(data));
+  }
+
+  const fluxoPorMes = {};
+  gastos.forEach((item) => {
+    if (!dataValida(item.data)) return;
+    const data = new Date(item.data);
+    const chave = chaveMes(data);
+    if (!meses.includes(chave)) return;
+    const valor = parseFloat(item.valor || 0) || 0;
+    const tipoNorm = normalizarTipoLancamento(item.tipo);
+    const delta = tipoNorm === 'Saida' ? -valor : valor;
+    fluxoPorMes[chave] = (fluxoPorMes[chave] || 0) + delta;
+  });
+
+  const serie = [];
+  let acumulado = 0;
+  meses.forEach((mes) => {
+    acumulado += fluxoPorMes[mes] || 0;
+    serie.push({ mes, valor: acumulado });
+  });
+
+  const valores = serie.map((ponto) => ponto.valor);
+  const min = Math.min(...valores, 0);
+  const max = Math.max(...valores, 0);
+  const amplitude = Math.max(1, max - min);
+  const largura = 1000;
+  const altura = 260;
+  const paddingTop = 12;
+  const paddingBottom = 20;
+  const yScale = (valor) => {
+    const proporcao = (valor - min) / amplitude;
+    const area = altura - paddingTop - paddingBottom;
+    return altura - paddingBottom - (proporcao * area);
+  };
+
+  const pontos = serie.map((ponto, idx) => {
+    const x = serie.length === 1 ? 0 : (idx / (serie.length - 1)) * largura;
+    const y = yScale(ponto.valor);
+    return { x, y };
+  });
+
+  const linha = pontos.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+  const area = `${linha} L ${largura} ${altura} L 0 ${altura} Z`;
+  const ultimoValor = serie.length > 0 ? serie[serie.length - 1].valor : 0;
+
+  resumoEvolucaoTotal.textContent = formatarValor(ultimoValor);
+  resumoEvolucaoTotal.classList.toggle('investment', ultimoValor >= 0);
+  resumoEvolucaoTotal.classList.toggle('expense', ultimoValor < 0);
+  resumoEvolucaoLabelStart.textContent = formatarMesAno(meses[0]);
+  resumoEvolucaoLabelEnd.textContent = formatarMesAno(meses[meses.length - 1]);
+  resumoEvolucaoSvg.innerHTML = `
+    <defs>
+      <linearGradient id="resumoGradientFill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(255, 47, 110, 0.42)"></stop>
+        <stop offset="100%" stop-color="rgba(255, 47, 110, 0)"></stop>
+      </linearGradient>
+    </defs>
+    <path d="${area}" fill="url(#resumoGradientFill)"></path>
+    <path d="${linha}" fill="none" stroke="#ff2f6e" stroke-width="3"></path>
+    <circle cx="${pontos[pontos.length - 1].x.toFixed(2)}" cy="${pontos[pontos.length - 1].y.toFixed(2)}" r="4" fill="#ff2f6e"></circle>
+  `;
 }
 
 function inicioFimMesAtual() {
@@ -1082,7 +1382,7 @@ function gastosMesAtualPorFiltroCartao() {
     const data = new Date(item.data);
     if (isNaN(data.getTime())) return false;
     if (data < inicio || data > fim) return false;
-    if (item.tipo !== 'Gasto') return false;
+    if (!isTipoSaida(item.tipo)) return false;
     if (cartaoSelecionado && item.cartaoId !== cartaoSelecionado) return false;
     return true;
   });
@@ -1141,7 +1441,8 @@ function renderFaturasCartao() {
   if (!estatFaturasLista) return;
 
   const cartaoFiltro = estatCartao?.value || '';
-  const cartoesVisiveis = currentCartoes.filter((cartao) => !cartaoFiltro || cartao.id === cartaoFiltro);
+  const cartoesBase = currentControleCartoes.length ? currentControleCartoes : currentCartoes;
+  const cartoesVisiveis = cartoesBase.filter((cartao) => !cartaoFiltro || cartao.id === cartaoFiltro);
 
   if (cartoesVisiveis.length === 0) {
     estatFaturasLista.innerHTML = '<p class="empty-state-inline">Nenhum cartão disponível para exibir fatura.</p>';
@@ -1152,7 +1453,7 @@ function renderFaturasCartao() {
     const { inicio, fim } = cicloFaturaAtual(cartao);
     const itens = gastos
       .filter((item) => {
-        if (item.tipo !== 'Gasto') return false;
+        if (!isTipoSaida(item.tipo)) return false;
         if (String(item.tipoPagamento || '').toLowerCase() !== 'credito') return false;
         if (item.cartaoId !== cartao.id) return false;
         const data = new Date(item.data);
@@ -1163,13 +1464,14 @@ function renderFaturasCartao() {
 
     const total = itens.reduce((sum, item) => sum + (parseFloat(item.valor || 0) || 0), 0);
     const nomeCartao = `${cartao.cartaoNome}${cartao.finalCartao ? ` • *${cartao.finalCartao}` : ''}`;
+    const ownerLabel = cartao.ownerLabel || getMemberLabel(cartao.userEmail) || 'Membro';
 
     return `
       <article class="fatura-card">
         <div class="fatura-header">
           <div>
             <h3>${escapeHtml(nomeCartao)}</h3>
-            <p>Fechamento dia ${escapeHtml(cartao.diaFechamentoFatura || '1')} • Ciclo ${formatarDataCurta(inicio)} a ${formatarDataCurta(fim)}</p>
+            <p>${escapeHtml(ownerLabel)} • Fechamento dia ${escapeHtml(cartao.diaFechamentoFatura || '1')} • Ciclo ${formatarDataCurta(inicio)} a ${formatarDataCurta(fim)}</p>
           </div>
           <div class="fatura-total">${formatarValor(total)}</div>
         </div>
@@ -1338,9 +1640,14 @@ async function carregarCartoes() {
 }
 
 function atualizarSeletoresCartao() {
-  const options = currentCartoes.map((c) => ({
+  const optionsPessoais = currentCartoes.map((c) => ({
     value: c.id,
     label: `${escapeHtml(c.cartaoNome)}${c.finalCartao ? ' *' + c.finalCartao : ''} (${escapeHtml(c.bancoNome)})`,
+  }));
+  const sourceControle = currentControleCartoes.length ? currentControleCartoes : currentCartoes;
+  const optionsControle = sourceControle.map((c) => ({
+    value: c.id,
+    label: `${escapeHtml(c.cartaoNome)}${c.finalCartao ? ' *' + c.finalCartao : ''} (${escapeHtml(c.bancoNome)})${c.ownerLabel ? ` - ${escapeHtml(c.ownerLabel)}` : ''}`,
   }));
   const cartaoSelect = document.getElementById('input-cartao');
   const impCartaoSelect = document.getElementById('imp-cartao');
@@ -1351,33 +1658,33 @@ function atualizarSeletoresCartao() {
 
   if (cartaoSelect) {
     cartaoSelect.innerHTML = '<option value="">Selecione o cartão...</option>';
-    options.forEach((o) => {
+    optionsPessoais.forEach((o) => {
       const el = document.createElement('option');
       el.value = o.value;
       el.textContent = o.label;
       cartaoSelect.appendChild(el);
     });
-    if (options.some((o) => o.value === prevVal1)) cartaoSelect.value = prevVal1;
+    if (optionsPessoais.some((o) => o.value === prevVal1)) cartaoSelect.value = prevVal1;
   }
   if (impCartaoSelect) {
     impCartaoSelect.innerHTML = '<option value="">Selecione...</option>';
-    options.forEach((o) => {
+    optionsPessoais.forEach((o) => {
       const el = document.createElement('option');
       el.value = o.value;
       el.textContent = o.label;
       impCartaoSelect.appendChild(el);
     });
-    if (options.some((o) => o.value === prevVal2)) impCartaoSelect.value = prevVal2;
+    if (optionsPessoais.some((o) => o.value === prevVal2)) impCartaoSelect.value = prevVal2;
   }
   if (estatCartaoSelect) {
     estatCartaoSelect.innerHTML = '<option value="">Todos os cartões</option>';
-    options.forEach((o) => {
+    optionsControle.forEach((o) => {
       const el = document.createElement('option');
       el.value = o.value;
       el.textContent = o.label;
       estatCartaoSelect.appendChild(el);
     });
-    if (options.some((o) => o.value === prevVal3)) estatCartaoSelect.value = prevVal3;
+    if (optionsControle.some((o) => o.value === prevVal3)) estatCartaoSelect.value = prevVal3;
   }
   atualizarEstatisticas();
 }
@@ -1432,6 +1739,7 @@ function renderCartoes() {
         const data = await safeReadResponseJson(res);
         if (!res.ok) throw new Error(data.error || 'Erro ao atualizar apelido do cartão');
         await carregarCartoes();
+        await carregarCartoesControleResumo();
       } catch (err) {
         alert(err.message);
       } finally {
@@ -1452,6 +1760,7 @@ function renderCartoes() {
         const data = await safeReadResponseJson(res);
         if (!res.ok) throw new Error(data.error || 'Erro ao remover cartão');
         await carregarCartoes();
+        await carregarCartoesControleResumo();
       } catch (err) {
         alert(err.message);
       } finally {
@@ -1490,6 +1799,7 @@ document.getElementById('form-cartao').addEventListener('submit', async (e) => {
     mostrarFeedbackEl(cartaoFeedback, 'success', 'Cartão cadastrado com sucesso!');
     e.target.reset();
     await carregarCartoes();
+    await carregarCartoesControleResumo();
   } catch (err) {
     mostrarFeedbackEl(cartaoFeedback, 'error', err.message);
   } finally {
@@ -1506,6 +1816,7 @@ async function carregarComprasParceladas() {
     if (!res.ok) throw new Error('Erro ao carregar compras parceladas');
     currentComprasParceladas = await res.json();
     renderComprasParceladas();
+    renderComprasParceladasPluggy();
   } catch (err) {
     console.warn('Erro ao carregar compras parceladas:', err.message);
   }
@@ -1537,6 +1848,112 @@ function renderComprasParceladas() {
     </article>
     `;
   }).join('');
+}
+
+function renderComprasParceladasPluggy() {
+  const lista = document.getElementById('lista-compras-pluggy');
+  if (!lista) return;
+
+  const cartoesPluggy = new Set(
+    currentCartoes
+      .filter((cartao) => String(cartao.origemCartao || '').toLowerCase() === 'pluggy')
+      .map((cartao) => cartao.id)
+  );
+
+  const comprasPluggy = currentComprasParceladas.filter((compra) => cartoesPluggy.has(compra.cartaoId));
+  if (!comprasPluggy.length) {
+    lista.innerHTML = '<p class="empty-state-inline">Nenhuma compra parcelada em cartões Pluggy.</p>';
+    return;
+  }
+
+  lista.innerHTML = comprasPluggy.map((c) => {
+    const cartao = currentCartoes.find((k) => k.id === c.cartaoId);
+    const cartaoLabel = cartao ? `${escapeHtml(cartao.cartaoNome)} (${escapeHtml(cartao.bancoNome)})` : escapeHtml(c.cartaoId);
+    return `
+      <article class="compra-item compra-item-pluggy">
+        <div class="compra-info">
+          <span class="compra-nome">${escapeHtml(c.descricao)}</span>
+          <span class="compra-cartao">${cartaoLabel}</span>
+          <div class="compra-meta-row">
+            <span class="compra-parcela tag">${escapeHtml(String(c.parcelaAtual))}/${escapeHtml(String(c.totalParcelas))} parcelas</span>
+            <span class="tag tag-bank">${escapeHtml(c.categoria || 'Categoria')}</span>
+            <span class="tag tag-member">${escapeHtml(getMemberLabel(c.responsavel))}</span>
+          </div>
+          <span class="compra-valor">${formatarValor(c.valorParcela)}/mês</span>
+        </div>
+        <span class="tag tag-pluggy">Pluggy</span>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderSugestoesParcelamento() {
+  const lista = document.getElementById('lista-sugestoes-parcelamento');
+  if (!lista) return;
+
+  if (!currentSugestoesParcelamento.length) {
+    lista.innerHTML = '<p class="empty-state-inline">Sem sugestões no momento. Faça uma importação com crédito habilitado.</p>';
+    return;
+  }
+
+  lista.innerHTML = currentSugestoesParcelamento.map((item, idx) => `
+    <article class="compra-item compra-item-sugestao">
+      <div class="compra-info">
+        <span class="compra-nome">${escapeHtml(item.descricao || 'Compra no cartão')}</span>
+        <span class="compra-cartao">${escapeHtml(item.cartaoNome || 'Cartão')} • ${escapeHtml(item.bancoNome || 'Banco')}</span>
+        <div class="compra-meta-row">
+          <span class="tag tag-pagamento">${formatarData(item.data)}</span>
+          <span class="tag tag-member">${escapeHtml(getMemberLabel(item.responsavel))}</span>
+        </div>
+        <span class="compra-valor">${formatarValor(item.valor)}</span>
+      </div>
+      <button class="btn btn-outline btn-sm btn-criar-parcelada-sugestao" data-index="${idx}">Criar parcelada</button>
+    </article>
+  `).join('');
+
+  lista.querySelectorAll('.btn-criar-parcelada-sugestao').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const idx = parseInt(button.dataset.index || '-1', 10);
+      const sugestao = currentSugestoesParcelamento[idx];
+      if (!sugestao) return;
+
+      const parcelasInput = prompt('Em quantas parcelas deseja dividir esta compra?', '3');
+      if (parcelasInput === null) return;
+      const totalParcelas = parseInt(String(parcelasInput), 10);
+      if (isNaN(totalParcelas) || totalParcelas < 2 || totalParcelas > 36) {
+        alert('Informe um número de parcelas entre 2 e 36.');
+        return;
+      }
+
+      button.disabled = true;
+      try {
+        const res = await fetch(`${API_URL}/compras-parceladas`, {
+          method: 'POST',
+          headers: controleHeaders(),
+          body: JSON.stringify({
+            cartaoId: sugestao.cartaoId,
+            descricao: sugestao.descricao || 'Compra no cartão',
+            categoria: 'Outros',
+            responsavel: sugestao.responsavel,
+            valorTotal: sugestao.valor,
+            totalParcelas,
+            dataCompra: sugestao.data,
+          }),
+        });
+        const data = await safeReadResponseJson(res);
+        if (!res.ok) throw new Error(data.error || 'Erro ao criar compra parcelada');
+
+        currentSugestoesParcelamento.splice(idx, 1);
+        renderSugestoesParcelamento();
+        await carregarComprasParceladas();
+        await carregarGastos();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
 }
 
 document.getElementById('form-importar-parcela').addEventListener('submit', async (e) => {
@@ -1661,6 +2078,7 @@ async function sincronizarCartoesPluggy(showFeedback = true) {
     }
 
     await carregarCartoes();
+    await carregarCartoesControleResumo();
     if (showFeedback) alert(`Sincronização concluída. ${total} cartão(ões) Pluggy atualizados.`);
   } catch (err) {
     if (showFeedback) alert(err.message);
@@ -1676,6 +2094,7 @@ async function abrirModalPluggy() {
   inicio.setDate(inicio.getDate() - 30);
   pluggyDataFim.value = hoje.toISOString().split('T')[0];
   pluggyDataInicio.value = inicio.toISOString().split('T')[0];
+  if (pluggyIncluirCredito) pluggyIncluirCredito.checked = false;
 
   await carregarPluggyItems();
   modalPluggy.classList.remove('hidden');
@@ -1743,6 +2162,7 @@ async function conectarBancoPluggy() {
 
           await carregarPluggyItems();
           await carregarCartoes();
+          await carregarCartoesControleResumo();
           mostrarFeedbackEl(pluggyFeedback, 'success', `${saveData.connectorName} vinculado a ${getMemberLabel(memberEmail)}. ${saveData.cartoesSincronizados || 0} cartão(ões) sincronizados.`);
         } catch (err) {
           mostrarFeedbackEl(pluggyFeedback, 'error', err.message);
@@ -1791,6 +2211,7 @@ btnImportarBanco.addEventListener('click', async () => {
 btnPluggyConfirmar.addEventListener('click', async () => {
   const dataInicio  = pluggyDataInicio.value;
   const dataFim     = pluggyDataFim.value;
+  const incluirCredito = Boolean(pluggyIncluirCredito?.checked);
   const itemIds = getSelectedPluggyItemIds();
 
   if (!dataInicio || !dataFim) {
@@ -1814,16 +2235,19 @@ btnPluggyConfirmar.addEventListener('click', async () => {
     const res  = await fetch(`${API_URL}/pluggy/import`, {
       method: 'POST',
       headers: controleHeaders(),
-      body: JSON.stringify({ itemIds, dataInicio, dataFim }),
+      body: JSON.stringify({ itemIds, dataInicio, dataFim, incluirCredito }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Erro ao importar');
 
     fecharModalPluggy();
+    currentSugestoesParcelamento = Array.isArray(data.sugestoesParcelamento) ? data.sugestoesParcelamento : [];
+    renderSugestoesParcelamento();
     await carregarGastos();
+    await carregarComprasParceladas();
     mostrarFeedback('success',
       data.imported > 0
-        ? `${data.imported} transações importadas com sucesso!`
+        ? `${data.imported} transações importadas com sucesso!${currentSugestoesParcelamento.length ? ` ${currentSugestoesParcelamento.length} sugestão(ões) de parcelamento geradas.` : ''}`
         : data.message || 'Nenhuma transação encontrada no período.'
     );
   } catch (err) {

@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getControleById,
   isMembro,
+  getMembros,
   getServiceSheets,
   listCartoes,
   createCompraParcelada,
@@ -30,6 +31,13 @@ async function resolveControle(req, res) {
     return null;
   }
   return controle;
+}
+
+async function listCartoesDoControle(controleId) {
+  const membros = await getMembros(controleId);
+  const emails = membros.map((membro) => membro.email).filter(Boolean);
+  const listas = await Promise.all(emails.map((email) => listCartoes(email)));
+  return listas.flat();
 }
 
 // Calcula data de parcela adicionando N meses à data base
@@ -87,10 +95,10 @@ router.post('/', async (req, res) => {
     const controle = await resolveControle(req, res);
     if (!controle) return;
 
-    // Valida que o cartão pertence ao usuário
-    const cartoes = await listCartoes(req.user.email);
+    // Valida que o cartão pertence a algum membro do controle
+    const cartoes = await listCartoesDoControle(controle.id);
     if (!cartoes.find((c) => c.id === cartaoId)) {
-      return res.status(400).json({ error: 'Cartão não encontrado ou não pertence a você' });
+      return res.status(400).json({ error: 'Cartão não encontrado neste controle' });
     }
 
     const valorParcelaBase = parseFloat((vTotal / nParcelas).toFixed(2));
@@ -119,7 +127,7 @@ router.post('/', async (req, res) => {
       requestBody: {
         values: [[
           id1, dataCompra, valorParcelaBase.toFixed(2),
-          categoria, descricao, responsavel, 'Gasto', dataRegistro,
+          categoria, descricao, responsavel, 'Saida', dataRegistro,
           'Manual', '', '',
           'credito', cartaoId,
           cartoes.find((c) => c.id === cartaoId)?.cartaoNome || '',
@@ -172,9 +180,9 @@ router.post('/importar-existente', async (req, res) => {
     const controle = await resolveControle(req, res);
     if (!controle) return;
 
-    const cartoes = await listCartoes(req.user.email);
+    const cartoes = await listCartoesDoControle(controle.id);
     if (!cartoes.find((c) => c.id === cartaoId)) {
-      return res.status(400).json({ error: 'Cartão não encontrado ou não pertence a você' });
+      return res.status(400).json({ error: 'Cartão não encontrado neste controle' });
     }
 
     const valorTotal = parseFloat((vParcela * nTotal).toFixed(2));

@@ -9,6 +9,7 @@ const {
   listPluggyItems,
   savePluggyItem,
   removePluggyItem,
+  listCartoes,
   upsertPluggyCartao,
   inativarCartoesPorPluggyItem,
 } = require('../services/masterSheet');
@@ -93,6 +94,13 @@ function isContaCartao(account) {
   const tipo = String(account?.type || '').toUpperCase();
   const subtipo = String(account?.subtype || '').toUpperCase();
   return tipo.includes('CREDIT') || tipo.includes('CARD') || subtipo.includes('CREDIT') || subtipo.includes('CARD');
+}
+
+function normalizeTipoLancamento(rawTipo) {
+  const tipo = String(rawTipo || '').trim().toLowerCase();
+  if (tipo === 'entrada') return 'Entrada';
+  if (tipo === 'investimento') return 'Investimento';
+  return 'Saida';
 }
 
 async function sincronizarCartoesPluggyDoItem(apiKey, userEmail, itemId, connectorName) {
@@ -188,7 +196,7 @@ router.post('/items', async (req, res) => {
     const connectorType = itemRes.body?.connector?.type || itemRes.body?.type || '';
 
     await savePluggyItem(controle.id, memberEmail, itemId, connectorName, connectorType);
-    const cartoesSincronizados = await sincronizarCartoesPluggyDoItem(apiKey, req.user.email, itemId, connectorName);
+    const cartoesSincronizados = await sincronizarCartoesPluggyDoItem(apiKey, memberEmail, itemId, connectorName);
 
     res.status(201).json({
       itemId,
@@ -210,8 +218,13 @@ router.delete('/items/:itemId', async (req, res) => {
     const controle = await resolveControle(req, res);
     if (!controle) return;
 
+    const linkedItems = await listPluggyItems(controle.id);
+    const vinculo = linkedItems.find((item) => item.itemId === req.params.itemId);
+
     await removePluggyItem(controle.id, req.params.itemId);
-  await inativarCartoesPorPluggyItem(req.user.email, req.params.itemId);
+    if (vinculo?.memberEmail) {
+      await inativarCartoesPorPluggyItem(vinculo.memberEmail, req.params.itemId);
+    }
     res.json({ message: 'Banco desvinculado com sucesso' });
   } catch (err) {
     console.error('Erro ao remover item Pluggy:', err);
@@ -234,7 +247,7 @@ router.post('/items/:itemId/sync-cartoes', async (req, res) => {
     const apiKey = await getPluggyApiKey();
     const cartoesSincronizados = await sincronizarCartoesPluggyDoItem(
       apiKey,
-      req.user.email,
+      vinculo.memberEmail,
       vinculo.itemId,
       vinculo.connectorName || 'Banco conectado',
     );
@@ -247,13 +260,14 @@ router.post('/items/:itemId/sync-cartoes', async (req, res) => {
 });
 
 // ─── POST /pluggy/import ──────────────────────────────────────────────────────
-// Importa transações de débito de um item bancário para o controle atual.
-// Body: { itemIds, dataInicio (YYYY-MM-DD), dataFim (YYYY-MM-DD) }
+// Importa transações bancárias para o controle atual.
+// Body: { itemIds, dataInicio (YYYY-MM-DD), dataFim (YYYY-MM-DD), incluirCredito?: boolean }
 router.post('/import', async (req, res) => {
   const controle = await resolveControle(req, res);
   if (!controle) return;
 
-  const { itemIds, itemId, dataInicio, dataFim, responsavel } = req.body;
+  const { itemIds, itemId, dataInicio, dataFim, responsavel, incluirCredito } = req.body;
+  const includeCredit = Boolean(incluirCredito);
   if (!dataInicio || !dataFim) {
     return res.status(400).json({ error: 'dataInicio e dataFim são obrigatórios' });
   }
@@ -284,6 +298,12 @@ router.post('/import', async (req, res) => {
       return res.status(400).json({ error: 'Selecione ao menos um banco vinculado para importar' });
     }
 
+    const members = Array.from(new Set(importItems.map((item) => String(item.memberEmail || '').toLowerCase()).filter(Boolean)));
+    const cardsByMember = new Map();
+    for (const memberEmail of members) {
+      cardsByMember.set(memberEmail, await listCartoes(memberEmail));
+    }
+
     const allTransactions = [];
     for (const linkedItem of importItems) {
       const accountsRes = await pluggyRequest(
@@ -298,6 +318,7 @@ router.post('/import', async (req, res) => {
 
       const accounts = accountsRes.body.results || [];
       for (const account of accounts) {
+        const isCardAccount = isContaCartao(account);
         const txRes = await pluggyRequest(
           'GET',
           `/transactions?accountId=${encodeURIComponent(account.id)}&from=${dataInicio}&to=${dataFim}&pageSize=500`,
@@ -307,50 +328,96 @@ router.post('/import', async (req, res) => {
 
         if (txRes.status !== 200) continue;
 
-        const debits = (txRes.body.results || []).filter((transaction) => {
-          if (transaction.type === 'DEBIT') return true;
+        const selecionadas = (txRes.body.results || []).filter((transaction) => {
+          const txType = String(transaction.type || '').toUpperCase();
           const numericAmount = Number(transaction.amount || 0);
-          return Number.isFinite(numericAmount) && numericAmount < 0;
+          const isDebit = txType === 'DEBIT' || (Number.isFinite(numericAmount) && numericAmount < 0);
+          if (isDebit) return true;
+
+          if (!includeCredit || !isCardAccount) return false;
+          const isCredit = txType === 'CREDIT' || (Number.isFinite(numericAmount) && numericAmount > 0);
+          return isCredit;
         });
 
-        debits.forEach((transaction) => {
+        selecionadas.forEach((transaction) => {
+          const memberEmail = String(linkedItem.memberEmail || '').toLowerCase();
+          const cards = cardsByMember.get(memberEmail) || [];
+          const cartao = cards.find((item) => String(item.pluggyAccountId || '') === String(account.id || '')) || null;
+          const numericAmount = Number(transaction.amount || 0);
+          const amount = Math.abs(Number.isFinite(numericAmount) ? numericAmount : 0);
+          const isCreditCardTx = isCardAccount;
+          const tipoPagamento = isCreditCardTx ? 'credito' : 'debito';
+
           allTransactions.push({
             transaction,
             linkedItem,
             account,
+            amount,
+            cartaoId: cartao?.id || '',
+            cartaoNome: cartao?.cartaoNome || resolveCartaoNomePluggy(account, linkedItem.connectorName),
+            tipoPagamento,
+            tipoLancamento: normalizeTipoLancamento('Saida'),
+            isCreditCardTx,
           });
         });
       }
     }
 
     if (allTransactions.length === 0) {
-      return res.json({ imported: 0, message: 'Nenhuma transação de débito encontrada no período.' });
+      return res.json({ imported: 0, message: includeCredit ? 'Nenhuma transação encontrada no período.' : 'Nenhuma transação de débito encontrada no período.' });
     }
 
     const now  = new Date().toISOString();
-    const rows = allTransactions.map(({ transaction, linkedItem, account }, index) => [
+    const rows = allTransactions.map(({ transaction, linkedItem, account, amount, cartaoId, cartaoNome, tipoPagamento, tipoLancamento }, index) => [
       `${Date.now()}${index}`,
       (transaction.date || transaction.paymentDate || dataInicio).split('T')[0],
-      Math.abs(Number(transaction.amount || 0)).toFixed(2),
+      amount.toFixed(2),
       'Outros',
       transaction.description || transaction.descriptionRaw || '',
       linkedItem.memberEmail,
-      'Gasto',
+      tipoLancamento,
       now,
       linkedItem.connectorName || account.name || 'Banco conectado',
       linkedItem.itemId,
       account.id || '',
+      tipoPagamento,
+      cartaoId,
+      cartaoNome,
+      '',
+      '',
+      '',
+      '',
+      '',
     ]);
 
     await getServiceSheets().spreadsheets.values.append({
       spreadsheetId: MASTER_ID(),
-      range: `${controle.spreadsheetId}!A:K`,
+      range: `${controle.spreadsheetId}!A:S`,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: { values: rows },
     });
 
-    res.json({ imported: rows.length, itemsProcessados: importItems.length });
+    const sugestoesParcelamento = allTransactions
+      .filter((item) => item.isCreditCardTx && item.cartaoId && item.amount > 0)
+      .slice(0, 25)
+      .map((item) => ({
+        transactionId: String(item.transaction.id || ''),
+        data: String(item.transaction.date || item.transaction.paymentDate || dataInicio).split('T')[0],
+        valor: item.amount.toFixed(2),
+        descricao: item.transaction.description || item.transaction.descriptionRaw || 'Compra no cartão',
+        responsavel: item.linkedItem.memberEmail,
+        cartaoId: item.cartaoId,
+        cartaoNome: item.cartaoNome,
+        bancoNome: item.linkedItem.connectorName || item.account.name || 'Banco conectado',
+      }));
+
+    res.json({
+      imported: rows.length,
+      itemsProcessados: importItems.length,
+      incluirCredito: includeCredit,
+      sugestoesParcelamento,
+    });
   } catch (err) {
     console.error('Pluggy import error:', err.message);
     res.status(500).json({ error: err.message });

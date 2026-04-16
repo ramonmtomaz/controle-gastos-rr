@@ -164,6 +164,182 @@ body {
 .summary-value.expense    { color: var(--danger); }
 .summary-value.investment { color: var(--green); }
 
+.resumo-fatura-card {
+  border-top: 1px solid #11192b;
+  padding-top: 8px;
+}
+
+.resumo-fatura-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.resumo-fatura-nome {
+  color: #e7edf9;
+  font-weight: 700;
+}
+
+.resumo-fatura-meta {
+  color: #7f90ad;
+  font-size: 12px;
+}
+
+/* ─── Resumo: visão dashboard ─────────────────────────────────────────────── */
+.resumo-vision {
+  background:
+    radial-gradient(1200px 240px at 30% -10%, rgba(255, 47, 110, 0.18), transparent 55%),
+    radial-gradient(900px 240px at 100% -20%, rgba(39, 214, 152, 0.13), transparent 50%),
+    #05070d;
+  border: 1px solid #1b2233;
+  border-radius: 20px;
+  padding: 22px;
+  color: #e5ecf7;
+  box-shadow: 0 20px 60px rgba(3, 7, 18, 0.45);
+}
+
+.resumo-vision-header h2 {
+  color: #f4f7ff;
+  font-size: 34px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.resumo-vision-header p {
+  margin: 4px 0 18px;
+  color: #8e9db8;
+}
+
+.resumo-grid-top {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.resumo-panel {
+  background: linear-gradient(180deg, rgba(8, 12, 21, 0.9) 0%, rgba(6, 10, 18, 0.9) 100%);
+  border: 1px solid #141d30;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.resumo-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.resumo-kicker {
+  color: #8390a8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resumo-big {
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 800;
+  color: #f6f8ff;
+}
+
+.resumo-big.expense { color: #ff667d; }
+.resumo-big.investment { color: #2ce6aa; }
+
+.resumo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resumo-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid #11192b;
+  color: #c8d3e8;
+  font-size: 14px;
+}
+
+.resumo-list-item small {
+  color: #7f90ad;
+  font-size: 12px;
+}
+
+.resumo-list-item strong {
+  font-size: 16px;
+}
+
+.resumo-empty {
+  color: #7f90ad;
+  font-size: 13px;
+  padding: 10px 0;
+}
+
+.resumo-progress-wrap {
+  margin-bottom: 10px;
+}
+
+.resumo-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #93a2be;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.resumo-progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #18223a;
+  overflow: hidden;
+}
+
+.resumo-progress-track span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #ff7d3b 0%, #f4ca25 100%);
+  transition: width 0.35s ease;
+}
+
+.resumo-evolucao-panel {
+  margin-top: 14px;
+}
+
+.resumo-evolucao-chart {
+  width: 100%;
+  height: 210px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 47, 110, 0.08), rgba(255, 47, 110, 0));
+}
+
+.resumo-evolucao-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.resumo-evolucao-labels {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  color: #7f90ad;
+  font-size: 12px;
+}
+
+.resumo-hidden-metrics {
+  display: none;
+}
+
 /* ─── Formulário ────────────────────────────────────────────────────────────── */
 .form-section h2 { margin-bottom: 20px; font-size: 18px; }
 .form-grid {
@@ -227,6 +403,54 @@ input:focus, select:focus { border-color: var(--primary); background: #fff; }
 .filter-input { width: auto; min-width: 140px; }
 .table-wrapper { overflow-x: auto; }
 
+.lancamentos-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lancamento-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.lancamento-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.lancamento-card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.lancamento-card-date {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.lancamento-card-valor {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.lancamento-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lancamento-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -259,6 +483,8 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   font-weight: 600;
 }
 .tag-gasto       { background: #fee2e2; color: #b91c1c; }
+.tag-saida       { background: #fee2e2; color: #b91c1c; }
+.tag-entrada     { background: #dcfce7; color: #166534; }
 .tag-investimento{ background: #d1fae5; color: #065f46; }
 .tag-member      { background: #dbeafe; color: #1d4ed8; }
 .tag-bank        { background: #f3f4f6; color: #374151; }
@@ -305,6 +531,28 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
 .conta-subtitle {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.pluggy-parceladas-box {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.compra-item-pluggy {
+  border-left: 3px solid #1d4ed8;
+}
+
+.compra-item-sugestao {
+  border-left: 3px solid #f59e0b;
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
 }
 
 /* ─── Modal ─────────────────────────────────────────────────────────────────── */
@@ -848,6 +1096,13 @@ tbody td { padding: 11px 12px; vertical-align: middle; }
   .summary-value { font-size: 16px; }
   .summary-label { font-size: 11px; }
   .card { padding: 16px; }
+
+  .resumo-vision { padding: 14px; border-radius: 14px; }
+  .resumo-vision-header h2 { font-size: 26px; }
+  .resumo-grid-top { grid-template-columns: 1fr; gap: 10px; }
+  .resumo-panel { padding: 12px; }
+  .resumo-big { font-size: 34px; }
+  .resumo-evolucao-chart { height: 180px; }
 
   .form-section h2 { font-size: 16px; margin-bottom: 14px; }
   .form-grid { grid-template-columns: 1fr; gap: 12px; }

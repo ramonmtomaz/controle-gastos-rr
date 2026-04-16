@@ -6,6 +6,15 @@ const { getControleById, isMembro, getServiceSheets } = require('../services/mas
 // o spreadsheet é sempre a planilha mestre
 const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID;
 
+function normalizeTipo(tipo) {
+  const raw = String(tipo || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (raw === 'gasto' || raw === 'saida' || raw === 'saída') return 'Saida';
+  if (raw === 'entrada') return 'Entrada';
+  if (raw === 'investimento') return 'Investimento';
+  return '';
+}
+
 /**
  * Valida X-Controle-Id, busca o controle e verifica se o usuário é membro.
  * Retorna o objeto controle ou envia a resposta de erro e retorna null.
@@ -40,14 +49,17 @@ router.get('/', async (req, res) => {
     });
 
     const rows = response.data.values || [];
-    const gastos = rows.map((row) => ({
+    const gastos = rows.map((row) => {
+      const tipoNormalizado = normalizeTipo(row[6]) || 'Saida';
+      return {
       id:                  row[0]  || '',
       data:                row[1]  || '',
       valor:               row[2]  || '',
       categoria:           row[3]  || '',
       descricao:           row[4]  || '',
       responsavel:         row[5]  || '',
-      tipo:                row[6]  || '',
+      tipo:                tipoNormalizado,
+      tipoOriginal:        row[6] || '',
       dataRegistro:        row[7]  || '',
       banco:               row[8]  || '',
       pluggyItemId:        row[9]  || '',
@@ -60,7 +72,8 @@ router.get('/', async (req, res) => {
       totalParcelas:       row[16] || '',
       valorOriginalCompra: row[17] || '',
       statusParcela:       row[18] || '',
-    }));
+      };
+    });
 
     res.json(gastos);
   } catch (err) {
@@ -77,8 +90,9 @@ router.post('/', async (req, res) => {
     compraParceladaId, numParcela, totalParcelas, valorOriginalCompra, statusParcela,
   } = req.body;
 
-  if (!data || !valor || !categoria || !responsavel || !tipo) {
-    return res.status(400).json({ error: 'Campos obrigatórios: data, valor, categoria, responsavel, tipo' });
+  const tipoNormalizado = normalizeTipo(tipo);
+  if (!data || !valor || !categoria || !responsavel || !tipoNormalizado) {
+    return res.status(400).json({ error: 'Campos obrigatórios: data, valor, categoria, responsavel, tipo (Entrada, Saida ou Investimento)' });
   }
 
   const valorNumerico = parseFloat(String(valor).replace(',', '.'));
@@ -86,7 +100,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Valor inválido' });
   }
 
-  const tiposPag = ['debito', 'credito', 'pix', 'boleto', 'dinheiro', 'outro'];
+  const tiposPag = ['debito', 'credito', 'pix', 'boleto', 'dinheiro', 'transferencia', 'outro'];
   const tipoPag = tipoPagamento ? String(tipoPagamento).toLowerCase() : '';
   if (tipoPag && !tiposPag.includes(tipoPag)) {
     return res.status(400).json({ error: 'tipoPagamento inválido' });
@@ -106,7 +120,7 @@ router.post('/', async (req, res) => {
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
         values: [[
-          id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipo, dataRegistro,
+          id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipoNormalizado, dataRegistro,
           'Manual', '', '',
           tipoPag || '',
           cartaoId    ? String(cartaoId).trim()    : '',

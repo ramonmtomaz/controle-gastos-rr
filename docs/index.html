@@ -78,32 +78,68 @@
       </section>
 
       <section class="dashboard-area" id="area-resumo">
-        <div class="summary-cards">
-          <div class="card summary-card">
-            <span class="summary-label">Total de Gastos</span>
-            <span class="summary-value expense" id="total-gastos">R$ 0,00</span>
+        <section class="resumo-vision">
+          <header class="resumo-vision-header">
+            <h2>Overview</h2>
+            <p>Visão geral dos seus dados financeiros.</p>
+          </header>
+
+          <div class="resumo-grid-top">
+            <article class="resumo-panel">
+              <div class="resumo-panel-head">
+                <span class="resumo-kicker">Contas bancárias</span>
+                <span class="resumo-big" id="resumo-bancos-total">R$ 0,00</span>
+              </div>
+              <div id="resumo-bancos-list" class="resumo-list"></div>
+            </article>
+
+            <article class="resumo-panel">
+              <div class="resumo-panel-head">
+                <span class="resumo-kicker">Cartões de crédito</span>
+                <span class="resumo-big expense" id="resumo-cartoes-total">R$ 0,00</span>
+              </div>
+              <div class="resumo-progress-wrap">
+                <div class="resumo-progress-meta">
+                  <span id="resumo-cartoes-usage">0% utilizado</span>
+                  <span id="resumo-cartoes-limit">Meta: R$ 0,00</span>
+                </div>
+                <div class="resumo-progress-track"><span id="resumo-cartoes-bar"></span></div>
+              </div>
+              <div id="resumo-cartoes-list" class="resumo-list"></div>
+            </article>
+
+            <article class="resumo-panel">
+              <div class="resumo-panel-head">
+                <span class="resumo-kicker">Investimentos</span>
+                <span class="resumo-big investment" id="resumo-invest-total">R$ 0,00</span>
+              </div>
+              <div id="resumo-invest-list" class="resumo-list"></div>
+            </article>
           </div>
-          <div class="card summary-card">
-            <span class="summary-label">Total de Investimentos</span>
-            <span class="summary-value investment" id="total-investimentos">R$ 0,00</span>
+
+          <article class="resumo-panel resumo-evolucao-panel">
+            <div class="resumo-panel-head">
+              <span class="resumo-kicker">Evolução do saldo</span>
+              <span class="resumo-big" id="resumo-evolucao-total">R$ 0,00</span>
+            </div>
+            <div class="resumo-evolucao-chart">
+              <svg id="resumo-evolucao-svg" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
+            <div class="resumo-evolucao-labels">
+              <span id="resumo-evolucao-label-start">--</span>
+              <span id="resumo-evolucao-label-end">--</span>
+            </div>
+          </article>
+
+          <div class="resumo-hidden-metrics">
+            <span id="total-gastos">R$ 0,00</span>
+            <span id="total-investimentos">R$ 0,00</span>
+            <span id="total-lancamentos">0</span>
+            <span id="total-renda-geral">R$ 0,00</span>
+            <span id="total-saldo-geral">R$ 0,00</span>
+            <span id="percentual-gasto-renda">0%</span>
           </div>
-          <div class="card summary-card">
-            <span class="summary-label">Lançamentos</span>
-            <span class="summary-value" id="total-lancamentos">0</span>
-          </div>
-          <div class="card summary-card">
-            <span class="summary-label">Renda Geral (mês)</span>
-            <span class="summary-value investment" id="total-renda-geral">R$ 0,00</span>
-          </div>
-          <div class="card summary-card">
-            <span class="summary-label">Saldo (Renda - Gastos)</span>
-            <span class="summary-value" id="total-saldo-geral">R$ 0,00</span>
-          </div>
-          <div class="card summary-card">
-            <span class="summary-label">Comprometimento da renda</span>
-            <span class="summary-value" id="percentual-gasto-renda">0%</span>
-          </div>
-        </div>
+        </section>
       </section>
 
       <section class="dashboard-area hidden" id="area-estatisticas">
@@ -151,9 +187,8 @@
 
       <section class="dashboard-area hidden" id="area-lancar">
         <section class="card form-section">
-          <h2>Novo Gasto</h2>
+          <h2>Novo Lançamento</h2>
           <form id="form-gasto">
-            <input type="hidden" id="input-tipo" value="Gasto" />
             <div class="form-grid">
               <div class="form-group">
                 <label for="input-data">Data *</label>
@@ -164,6 +199,14 @@
                 <input type="number" id="input-valor" step="0.01" min="0.01" placeholder="0,00" required />
               </div>
               <div class="form-group">
+                <label for="input-tipo-lancamento">Classificação *</label>
+                <select id="input-tipo-lancamento" required>
+                  <option value="Saida">Saída</option>
+                  <option value="Entrada">Entrada</option>
+                  <option value="Investimento">Investimento</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label for="input-tipo-pagamento">Tipo de pagamento *</label>
                 <select id="input-tipo-pagamento" required>
                   <option value="">Selecione...</option>
@@ -172,6 +215,7 @@
                   <option value="pix">Pix</option>
                   <option value="boleto">Boleto</option>
                   <option value="dinheiro">Dinheiro</option>
+                  <option value="transferencia">Transferência</option>
                   <option value="outro">Outro</option>
                 </select>
               </div>
@@ -300,8 +344,22 @@
               <input type="text" id="filter-search" placeholder="Buscar..." class="filter-input" />
               <select id="filter-tipo" class="filter-input">
                 <option value="">Todos os tipos</option>
-                <option value="Gasto">Gastos</option>
+                <option value="Saida">Saídas</option>
+                <option value="Entrada">Entradas</option>
                 <option value="Investimento">Investimentos</option>
+              </select>
+              <select id="filter-pagamento" class="filter-input">
+                <option value="">Todos pagamentos</option>
+                <option value="debito">Débito</option>
+                <option value="credito">Crédito</option>
+                <option value="pix">Pix</option>
+                <option value="boleto">Boleto</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="transferencia">Transferência</option>
+                <option value="outro">Outro</option>
+              </select>
+              <select id="filter-categoria" class="filter-input">
+                <option value="">Todas categorias</option>
               </select>
               <select id="filter-responsavel" class="filter-input">
                 <option value="">Todos</option>
@@ -315,26 +373,7 @@
 
           <div id="loading" class="loading hidden">Carregando...</div>
           <div id="empty-state" class="empty-state hidden">Nenhum lançamento encontrado.</div>
-
-          <div class="table-wrapper">
-            <table id="tabela-gastos">
-              <thead>
-                <tr>
-                  <th>Data</th>
-                  <th>Tipo</th>
-                  <th>Pagamento</th>
-                  <th>Categoria</th>
-                  <th>Descrição</th>
-                  <th>Banco</th>
-                  <th>Parcela</th>
-                  <th>Responsável</th>
-                  <th class="text-right">Valor</th>
-                  <th class="text-center">Ação</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-gastos"></tbody>
-            </table>
-          </div>
+          <div id="tbody-gastos" class="lancamentos-cards"></div>
         </section>
       </section>
 
@@ -470,6 +509,18 @@
           </details>
 
           <div id="lista-compras" class="compras-lista"></div>
+
+          <div class="pluggy-parceladas-box">
+            <h3>Parceladas de cartões Pluggy</h3>
+            <p class="section-subtitle">Acompanhe parcelamentos vinculados a cartões sincronizados pelo Pluggy.</p>
+            <div id="lista-compras-pluggy" class="compras-lista"></div>
+          </div>
+
+          <div class="pluggy-parceladas-box">
+            <h3>Sugestões de parcelamento por importação</h3>
+            <p class="section-subtitle">Após importar com crédito, você pode converter compras em parceladas.</p>
+            <div id="lista-sugestoes-parcelamento" class="compras-lista"></div>
+          </div>
         </section>
       </section>
 
@@ -603,6 +654,13 @@
         <div class="form-group">
           <label for="pluggy-data-fim">Data de fim *</label>
           <input type="date" id="pluggy-data-fim" />
+        </div>
+        <div class="form-group">
+          <label for="pluggy-incluir-credito">Importação avançada</label>
+          <label class="checkbox-inline">
+            <input type="checkbox" id="pluggy-incluir-credito" />
+            Incluir transações de cartão (crédito) para sugerir parcelamento
+          </label>
         </div>
       </div>
       <div class="pluggy-section">

@@ -2,6 +2,12 @@ const express = require('express');
 const router  = express.Router();
 const master  = require('../services/masterSheet');
 
+function labelFromEmail(email) {
+  const raw = String(email || '').trim();
+  if (!raw.includes('@')) return raw;
+  return raw.split('@')[0];
+}
+
 // ─── GET /controles — lista controles do usuário ──────────────────────────────
 router.get('/', async (req, res) => {
   try {
@@ -148,6 +154,34 @@ router.get('/:id/renda-geral', async (req, res) => {
   } catch (err) {
     console.error('Erro ao calcular renda geral:', err);
     res.status(500).json({ error: 'Erro ao calcular renda geral do controle' });
+  }
+});
+
+// ─── GET /controles/:id/cartoes — cartões de todos os membros ─────────────
+router.get('/:id/cartoes', async (req, res) => {
+  const { id } = req.params;
+  try {
+    if (!(await master.isMembro(id, req.user.email))) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const membros = await master.getMembros(id);
+    const cartoesPorMembro = await Promise.all(
+      membros.map(async (membro) => {
+        const cartoes = await master.listCartoes(membro.email);
+        return cartoes.map((cartao) => ({
+          ...cartao,
+          ownerEmail: membro.email,
+          ownerRole: membro.role,
+          ownerLabel: labelFromEmail(membro.email),
+        }));
+      })
+    );
+
+    res.json(cartoesPorMembro.flat());
+  } catch (err) {
+    console.error('Erro ao listar cartões do controle:', err);
+    res.status(500).json({ error: 'Erro ao listar cartões do controle' });
   }
 });
 
