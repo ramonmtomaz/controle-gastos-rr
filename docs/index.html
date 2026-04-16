@@ -70,6 +70,7 @@
       <section class="card dashboard-menu" id="dashboard-menu">
         <button class="dashboard-menu-btn is-active" data-area="resumo">Resumo</button>
         <button class="dashboard-menu-btn" data-area="lancar">Lançar gasto</button>
+        <button class="dashboard-menu-btn" data-area="investimento">Lançar investimento</button>
         <button class="dashboard-menu-btn" data-area="lancamentos">Lançamentos</button>
         <button class="dashboard-menu-btn" data-area="bancos">Bancos</button>
         <button class="dashboard-menu-btn" data-area="conta">Conta</button>
@@ -94,8 +95,9 @@
 
       <section class="dashboard-area hidden" id="area-lancar">
         <section class="card form-section">
-          <h2>Novo Lançamento</h2>
+          <h2>Novo Gasto</h2>
           <form id="form-gasto">
+            <input type="hidden" id="input-tipo" value="Gasto" />
             <div class="form-grid">
               <div class="form-group">
                 <label for="input-data">Data *</label>
@@ -106,36 +108,36 @@
                 <input type="number" id="input-valor" step="0.01" min="0.01" placeholder="0,00" required />
               </div>
               <div class="form-group">
-                <label for="input-tipo">Tipo *</label>
-                <select id="input-tipo" required>
+                <label for="input-tipo-pagamento">Tipo de pagamento *</label>
+                <select id="input-tipo-pagamento" required>
                   <option value="">Selecione...</option>
-                  <option value="Gasto">Gasto</option>
-                  <option value="Investimento">Investimento</option>
+                  <option value="debito">Débito</option>
+                  <option value="credito">Crédito</option>
+                  <option value="pix">Pix</option>
+                  <option value="boleto">Boleto</option>
+                  <option value="dinheiro">Dinheiro</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div class="form-group" id="grupo-cartao" style="display:none">
+                <label for="input-cartao">Cartão *</label>
+                <select id="input-cartao">
+                  <option value="">Selecione o cartão...</option>
                 </select>
               </div>
               <div class="form-group">
                 <label for="input-categoria">Categoria *</label>
                 <select id="input-categoria" required>
                   <option value="">Selecione...</option>
-                  <optgroup label="Gastos">
-                    <option value="Alimentação">Alimentação</option>
-                    <option value="Transporte">Transporte</option>
-                    <option value="Moradia">Moradia</option>
-                    <option value="Saúde">Saúde</option>
-                    <option value="Educação">Educação</option>
-                    <option value="Lazer">Lazer</option>
-                    <option value="Vestuário">Vestuário</option>
-                    <option value="Assinaturas">Assinaturas</option>
-                    <option value="Outros">Outros</option>
-                  </optgroup>
-                  <optgroup label="Investimentos">
-                    <option value="Renda Fixa">Renda Fixa</option>
-                    <option value="Renda Variável">Renda Variável</option>
-                    <option value="Poupança">Poupança</option>
-                    <option value="Previdência">Previdência</option>
-                    <option value="Cripto">Cripto</option>
-                    <option value="Imóvel">Imóvel</option>
-                  </optgroup>
+                  <option value="Alimentação">Alimentação</option>
+                  <option value="Transporte">Transporte</option>
+                  <option value="Moradia">Moradia</option>
+                  <option value="Saúde">Saúde</option>
+                  <option value="Educação">Educação</option>
+                  <option value="Lazer">Lazer</option>
+                  <option value="Vestuário">Vestuário</option>
+                  <option value="Assinaturas">Assinaturas</option>
+                  <option value="Outros">Outros</option>
                 </select>
               </div>
               <div class="form-group">
@@ -149,9 +151,86 @@
                 <input type="text" id="input-descricao" placeholder="Ex: Compras no mercado" maxlength="200" />
               </div>
             </div>
+
+            <!-- Parcelamento (visível somente para crédito) -->
+            <div id="grupo-parcelamento" class="parcelas-section hidden">
+              <h3 class="parcelas-titulo">Parcelamento</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="input-parcelas">Número de parcelas</label>
+                  <select id="input-parcelas">
+                    <option value="1">1x (à vista)</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                    <option value="4">4x</option>
+                    <option value="5">5x</option>
+                    <option value="6">6x</option>
+                    <option value="7">7x</option>
+                    <option value="8">8x</option>
+                    <option value="9">9x</option>
+                    <option value="10">10x</option>
+                    <option value="11">11x</option>
+                    <option value="12">12x</option>
+                    <option value="18">18x</option>
+                    <option value="24">24x</option>
+                    <option value="36">36x</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Valor por parcela</label>
+                  <div id="preview-parcela" class="parcela-preview">—</div>
+                </div>
+              </div>
+            </div>
+
             <div class="form-actions">
               <div id="form-feedback" class="feedback hidden"></div>
               <button type="submit" class="btn btn-primary" id="btn-submit">Adicionar</button>
+            </div>
+          </form>
+        </section>
+      </section>
+
+      <section class="dashboard-area hidden" id="area-investimento">
+        <section class="card form-section">
+          <h2>Novo Investimento</h2>
+          <form id="form-investimento">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="inv-data">Data *</label>
+                <input type="date" id="inv-data" required />
+              </div>
+              <div class="form-group">
+                <label for="inv-valor">Valor (R$) *</label>
+                <input type="number" id="inv-valor" step="0.01" min="0.01" placeholder="0,00" required />
+              </div>
+              <div class="form-group">
+                <label for="inv-categoria">Categoria *</label>
+                <select id="inv-categoria" required>
+                  <option value="">Selecione...</option>
+                  <option value="Renda Fixa">Renda Fixa</option>
+                  <option value="Renda Variável">Renda Variável</option>
+                  <option value="Poupança">Poupança</option>
+                  <option value="Previdência">Previdência</option>
+                  <option value="Cripto">Cripto</option>
+                  <option value="Imóvel">Imóvel</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="inv-responsavel">Responsável *</label>
+                <select id="inv-responsavel" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="form-group form-group-full">
+                <label for="inv-descricao">Descrição</label>
+                <input type="text" id="inv-descricao" placeholder="Ex: Tesouro Direto" maxlength="200" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <div id="inv-feedback" class="feedback hidden"></div>
+              <button type="submit" class="btn btn-primary" id="btn-submit-inv">Adicionar</button>
             </div>
           </form>
         </section>
@@ -187,9 +266,11 @@
                 <tr>
                   <th>Data</th>
                   <th>Tipo</th>
+                  <th>Pagamento</th>
                   <th>Categoria</th>
                   <th>Descrição</th>
                   <th>Banco</th>
+                  <th>Parcela</th>
                   <th>Responsável</th>
                   <th class="text-right">Valor</th>
                   <th class="text-center">Ação</th>
@@ -202,10 +283,126 @@
       </section>
 
       <section class="dashboard-area hidden" id="area-bancos">
+        <!-- Pluggy -->
         <section class="card bancos-section">
           <h2>Bancos</h2>
           <p class="bancos-subtitle">Conecte instituições e importe transações pelo Pluggy quando precisar.</p>
           <button id="btn-importar-banco" class="btn btn-primary">🏦 Abrir importação bancária</button>
+        </section>
+
+        <!-- Cartões Manuais -->
+        <section class="card cartoes-section">
+          <h2>Cartões Manuais</h2>
+          <p class="section-subtitle">Cadastre seus cartões para usar ao lançar gastos.</p>
+
+          <form id="form-cartao" class="form-grid">
+            <div class="form-group">
+              <label for="cartao-banco">Banco / Instituição *</label>
+              <input type="text" id="cartao-banco" maxlength="100" placeholder="Ex: Nubank" required />
+            </div>
+            <div class="form-group">
+              <label for="cartao-nome">Nome do cartão *</label>
+              <input type="text" id="cartao-nome" maxlength="100" placeholder="Ex: Nubank Roxinho" required />
+            </div>
+            <div class="form-group">
+              <label for="cartao-final">Final (4 dígitos)</label>
+              <input type="text" id="cartao-final" maxlength="4" placeholder="1234" pattern="\d{0,4}" />
+            </div>
+            <div class="form-group">
+              <label for="cartao-bandeira">Bandeira</label>
+              <select id="cartao-bandeira">
+                <option value="">Outra</option>
+                <option value="Visa">Visa</option>
+                <option value="Mastercard">Mastercard</option>
+                <option value="Elo">Elo</option>
+                <option value="American Express">American Express</option>
+                <option value="Hipercard">Hipercard</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cartao-tipo">Tipo *</label>
+              <select id="cartao-tipo" required>
+                <option value="credito">Crédito</option>
+                <option value="debito">Débito</option>
+                <option value="ambos">Crédito e Débito</option>
+              </select>
+            </div>
+            <div class="form-actions form-group">
+              <div id="cartao-feedback" class="feedback hidden"></div>
+              <button type="submit" class="btn btn-primary">+ Adicionar cartão</button>
+            </div>
+          </form>
+
+          <div id="lista-cartoes" class="cartoes-lista"></div>
+        </section>
+
+        <!-- Compras Parceladas -->
+        <section class="card compras-section">
+          <h2>Compras Parceladas</h2>
+          <p class="section-subtitle">Gerencie parcelamentos existentes e acompanhe parcelas futuras.</p>
+
+          <details class="parcelas-importar">
+            <summary>+ Informar parcelamento existente</summary>
+            <form id="form-importar-parcela" class="form-grid" style="margin-top:12px">
+              <div class="form-group">
+                <label for="imp-cartao">Cartão *</label>
+                <select id="imp-cartao" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="imp-descricao">Descrição *</label>
+                <input type="text" id="imp-descricao" maxlength="200" placeholder="Ex: Geladeira" required />
+              </div>
+              <div class="form-group">
+                <label for="imp-categoria">Categoria *</label>
+                <select id="imp-categoria" required>
+                  <option value="">Selecione...</option>
+                  <option value="Alimentação">Alimentação</option>
+                  <option value="Transporte">Transporte</option>
+                  <option value="Moradia">Moradia</option>
+                  <option value="Saúde">Saúde</option>
+                  <option value="Educação">Educação</option>
+                  <option value="Lazer">Lazer</option>
+                  <option value="Vestuário">Vestuário</option>
+                  <option value="Assinaturas">Assinaturas</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="imp-responsavel">Responsável *</label>
+                <select id="imp-responsavel" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="imp-valor-parcela">Valor da parcela (R$) *</label>
+                <input type="number" id="imp-valor-parcela" step="0.01" min="0.01" required />
+              </div>
+              <div class="form-group">
+                <label for="imp-parcela-atual">Parcela atual *</label>
+                <input type="number" id="imp-parcela-atual" min="1" required />
+              </div>
+              <div class="form-group">
+                <label for="imp-total-parcelas">Total de parcelas *</label>
+                <input type="number" id="imp-total-parcelas" min="1" required />
+              </div>
+              <div class="form-group">
+                <label for="imp-parcelas-restantes">Parcelas restantes *</label>
+                <input type="number" id="imp-parcelas-restantes" min="1" required />
+              </div>
+              <div class="form-group">
+                <label for="imp-proxima-data">Data da próxima parcela *</label>
+                <input type="date" id="imp-proxima-data" required />
+              </div>
+              <div class="form-actions form-group-full">
+                <div id="imp-feedback" class="feedback hidden"></div>
+                <button type="submit" class="btn btn-primary">Importar parcelamento</button>
+              </div>
+            </form>
+          </details>
+
+          <div id="lista-compras" class="compras-lista"></div>
         </section>
       </section>
 

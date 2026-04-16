@@ -7,6 +7,8 @@ const gastosRoutes   = require('./routes/gastos');
 const controlesRoutes = require('./routes/controles');
 const pluggyRoutes   = require('./routes/pluggy');
 const pluggyWebhookRoutes = require('./routes/pluggyWebhook');
+const cartoesRoutes  = require('./routes/cartoes');
+const comprasParceladasRoutes = require('./routes/comprasParceladas');
 const { requireAuth } = require('./middleware/auth');
 
 const app = express();
@@ -32,6 +34,8 @@ app.use('/webhooks/pluggy', pluggyWebhookRoutes);
 app.use('/controles', requireAuth, controlesRoutes);
 app.use('/gastos',    requireAuth, gastosRoutes);
 app.use('/pluggy',    requireAuth, pluggyRoutes);
+app.use('/cartoes',   requireAuth, cartoesRoutes);
+app.use('/compras-parceladas', requireAuth, comprasParceladasRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

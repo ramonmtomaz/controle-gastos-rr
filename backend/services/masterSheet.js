@@ -4,7 +4,7 @@ const { randomBytes, randomUUID } = require('crypto');
 // ─── Sheets client (service account) ────────────────────────────────────────
 let _sheets = null;
 let _masterSetupDone = false;
-const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems', 'Usuarios']);
+const MASTER_TABS = new Set(['Controles', 'Membros', 'Codigos', 'PluggyItems', 'Usuarios', 'CartoesUsuario', 'ComprasParceladas', 'ParcelasProgramadas']);
 
 function getServiceSheets() {
   if (_sheets) return _sheets;
@@ -126,6 +126,9 @@ async function setupMasterSheet() {
     { name: 'Codigos',   headers: ['controle_id', 'code', 'expires_at'] },
     { name: 'PluggyItems', headers: ['controle_id', 'member_email', 'item_id', 'connector_name', 'connector_type', 'created_at', 'updated_at'] },
     { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at'] },
+    { name: 'CartoesUsuario', headers: ['id', 'user_email', 'banco_nome', 'cartao_nome', 'final_cartao', 'bandeira', 'tipo_cartao', 'active', 'created_at', 'updated_at'] },
+    { name: 'ComprasParceladas', headers: ['id', 'controle_id', 'user_email', 'cartao_id', 'descricao', 'categoria', 'responsavel', 'valor_total', 'total_parcelas', 'parcela_atual', 'valor_parcela', 'data_compra', 'status', 'created_at', 'updated_at'] },
+    { name: 'ParcelasProgramadas', headers: ['id', 'compra_id', 'controle_id', 'cartao_id', 'numero_parcela', 'valor_parcela', 'data_prevista', 'status', 'gasto_id', 'created_at', 'updated_at'] },
   ];
 
   const newTabs = tabs.filter(t => !existing.includes(t.name));
@@ -184,10 +187,10 @@ async function createControle(nome, ownerEmail) {
   // Adiciona cabeçalho na nova aba
   await getServiceSheets().spreadsheets.values.update({
     spreadsheetId: MASTER_ID(),
-    range: `${tabName}!A1:K1`,
+    range: `${tabName}!A1:S1`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [['ID', 'Data', 'Valor', 'Categoria', 'Descrição', 'Responsável', 'Tipo', 'DataRegistro', 'Banco', 'PluggyItemId', 'ContaId']],
+      values: [['ID', 'Data', 'Valor', 'Categoria', 'Descrição', 'Responsável', 'Tipo', 'DataRegistro', 'Banco', 'PluggyItemId', 'ContaId', 'TipoPagamento', 'CartaoId', 'CartaoNome', 'CompraParceladaId', 'NumParcela', 'TotalParcelas', 'ValorOriginalCompra', 'StatusParcela']],
     },
   });
 
@@ -376,6 +379,198 @@ async function updateUserProfile(email, updates = {}) {
   };
 }
 
+// ─── CartoesUsuario ─────────────────────────────────────────────────────────
+function mapCartao(row) {
+  return {
+    id:         row[0] || '',
+    userEmail:  row[1] || '',
+    bancoNome:  row[2] || '',
+    cartaoNome: row[3] || '',
+    finalCartao: row[4] || '',
+    bandeira:   row[5] || '',
+    tipoCartao: row[6] || '',
+    active:     (row[7] || 'true') !== 'false',
+    createdAt:  row[8] || '',
+    updatedAt:  row[9] || '',
+  };
+}
+
+async function listCartoes(userEmail) {
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const rows = await readTab('CartoesUsuario');
+  return rows
+    .filter((row) => (row[1] || '').toLowerCase() === normalizedEmail && (row[7] || 'true') !== 'false')
+    .map(mapCartao);
+}
+
+async function createCartao(userEmail, { bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao }) {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  await appendRow('CartoesUsuario', [
+    id, normalizedEmail,
+    String(bancoNome || '').trim(),
+    String(cartaoNome || '').trim(),
+    String(finalCartao || '').trim(),
+    String(bandeira || '').trim(),
+    String(tipoCartao || 'credito').trim(),
+    'true', now, now,
+  ]);
+  return { id, userEmail: normalizedEmail, bancoNome, cartaoNome, finalCartao, bandeira, tipoCartao, active: true, createdAt: now, updatedAt: now };
+}
+
+async function updateCartao(id, userEmail, updates) {
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const rows = await readTab('CartoesUsuario');
+  const index = rows.findIndex((row) => row[0] === id && (row[1] || '').toLowerCase() === normalizedEmail);
+  if (index === -1) throw new Error('Cartão não encontrado');
+  const existing = rows[index];
+  const now = new Date().toISOString();
+  await updateRow('CartoesUsuario', index, [
+    id,
+    normalizedEmail,
+    updates.bancoNome  !== undefined ? String(updates.bancoNome  || '').trim() : (existing[2] || ''),
+    updates.cartaoNome !== undefined ? String(updates.cartaoNome || '').trim() : (existing[3] || ''),
+    updates.finalCartao !== undefined ? String(updates.finalCartao || '').trim() : (existing[4] || ''),
+    updates.bandeira   !== undefined ? String(updates.bandeira   || '').trim() : (existing[5] || ''),
+    updates.tipoCartao !== undefined ? String(updates.tipoCartao || '').trim() : (existing[6] || ''),
+    updates.active     !== undefined ? String(updates.active) : (existing[7] || 'true'),
+    existing[8] || now,
+    now,
+  ]);
+  return mapCartao([
+    id, normalizedEmail,
+    updates.bancoNome  !== undefined ? String(updates.bancoNome  || '').trim() : (existing[2] || ''),
+    updates.cartaoNome !== undefined ? String(updates.cartaoNome || '').trim() : (existing[3] || ''),
+    updates.finalCartao !== undefined ? String(updates.finalCartao || '').trim() : (existing[4] || ''),
+    updates.bandeira   !== undefined ? String(updates.bandeira   || '').trim() : (existing[5] || ''),
+    updates.tipoCartao !== undefined ? String(updates.tipoCartao || '').trim() : (existing[6] || ''),
+    updates.active     !== undefined ? String(updates.active) : (existing[7] || 'true'),
+    existing[8] || now,
+    now,
+  ]);
+}
+
+async function inativarCartao(id, userEmail) {
+  return updateCartao(id, userEmail, { active: false });
+}
+
+// ─── ComprasParceladas ────────────────────────────────────────────────────────
+function mapCompra(row) {
+  return {
+    id:           row[0]  || '',
+    controleId:   row[1]  || '',
+    userEmail:    row[2]  || '',
+    cartaoId:     row[3]  || '',
+    descricao:    row[4]  || '',
+    categoria:    row[5]  || '',
+    responsavel:  row[6]  || '',
+    valorTotal:   row[7]  || '',
+    totalParcelas: row[8] || '',
+    parcelaAtual: row[9]  || '',
+    valorParcela: row[10] || '',
+    dataCompra:   row[11] || '',
+    status:       row[12] || '',
+    createdAt:    row[13] || '',
+    updatedAt:    row[14] || '',
+  };
+}
+
+async function listComprasParceladas(controleId) {
+  const rows = await readTab('ComprasParceladas');
+  return rows.filter((row) => row[1] === controleId).map(mapCompra);
+}
+
+async function createCompraParcelada(controleId, userEmail, { cartaoId, descricao, categoria, responsavel, valorTotal, totalParcelas, dataCompra }) {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  const normalizedEmail = String(userEmail || '').toLowerCase();
+  const vTotal = parseFloat(String(valorTotal).replace(',', '.'));
+  const nParcelas = parseInt(String(totalParcelas), 10);
+  const valorParcelaBase = parseFloat((vTotal / nParcelas).toFixed(2));
+  await appendRow('ComprasParceladas', [
+    id, controleId, normalizedEmail,
+    String(cartaoId || '').trim(),
+    String(descricao || '').trim(),
+    String(categoria || '').trim(),
+    String(responsavel || '').trim(),
+    vTotal.toFixed(2),
+    nParcelas,
+    1,
+    valorParcelaBase.toFixed(2),
+    String(dataCompra || '').trim(),
+    'ativa',
+    now, now,
+  ]);
+  return { id, controleId, userEmail: normalizedEmail, cartaoId, descricao, categoria, responsavel, valorTotal: vTotal, totalParcelas: nParcelas, parcelaAtual: 1, valorParcela: valorParcelaBase, dataCompra, status: 'ativa', createdAt: now, updatedAt: now };
+}
+
+async function getCompraParceladaById(id) {
+  const rows = await readTab('ComprasParceladas');
+  const row = rows.find((r) => r[0] === id);
+  return row ? mapCompra(row) : null;
+}
+
+// ─── ParcelasProgramadas ──────────────────────────────────────────────────────
+function mapParcela(row) {
+  return {
+    id:           row[0]  || '',
+    compraId:     row[1]  || '',
+    controleId:   row[2]  || '',
+    cartaoId:     row[3]  || '',
+    numeroParcela: row[4] || '',
+    valorParcela: row[5]  || '',
+    dataPrevista: row[6]  || '',
+    status:       row[7]  || '',
+    gastoId:      row[8]  || '',
+    createdAt:    row[9]  || '',
+    updatedAt:    row[10] || '',
+  };
+}
+
+async function createParcelaProgramada(compraId, controleId, cartaoId, numeroParcela, valorParcela, dataPrevista) {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  await appendRow('ParcelasProgramadas', [
+    id, compraId, controleId, cartaoId,
+    numeroParcela,
+    parseFloat(String(valorParcela).replace(',', '.')).toFixed(2),
+    String(dataPrevista || '').trim(),
+    'pendente',
+    '',
+    now, now,
+  ]);
+  return { id, compraId, controleId, cartaoId, numeroParcela, valorParcela, dataPrevista, status: 'pendente', gastoId: '', createdAt: now, updatedAt: now };
+}
+
+async function listParcelasProgramadas(controleId, statusFilter) {
+  const rows = await readTab('ParcelasProgramadas');
+  return rows
+    .filter((row) => row[2] === controleId && (!statusFilter || row[7] === statusFilter))
+    .map(mapParcela);
+}
+
+async function updateParcelaProgramada(id, updates) {
+  const rows = await readTab('ParcelasProgramadas');
+  const index = rows.findIndex((row) => row[0] === id);
+  if (index === -1) throw new Error('Parcela não encontrada');
+  const existing = rows[index];
+  const now = new Date().toISOString();
+  await updateRow('ParcelasProgramadas', index, [
+    id,
+    existing[1] || '',
+    existing[2] || '',
+    existing[3] || '',
+    existing[4] || '',
+    updates.valorParcela  !== undefined ? parseFloat(String(updates.valorParcela).replace(',', '.')).toFixed(2) : (existing[5] || ''),
+    updates.dataPrevista  !== undefined ? String(updates.dataPrevista).trim()  : (existing[6] || ''),
+    updates.status        !== undefined ? String(updates.status).trim()        : (existing[7] || ''),
+    updates.gastoId       !== undefined ? String(updates.gastoId).trim()       : (existing[8] || ''),
+    existing[9]  || now,
+    now,
+  ]);
+}
+
 // ─── Remoção completa do controle ────────────────────────────────────────────
 async function deleteControle(controleId) {
   const controle = await getControleById(controleId);
@@ -449,4 +644,14 @@ module.exports = {
   deleteControle,
   getOrCreateInviteCode,
   joinByCode,
+  listCartoes,
+  createCartao,
+  updateCartao,
+  inativarCartao,
+  listComprasParceladas,
+  createCompraParcelada,
+  getCompraParceladaById,
+  createParcelaProgramada,
+  listParcelasProgramadas,
+  updateParcelaProgramada,
 };

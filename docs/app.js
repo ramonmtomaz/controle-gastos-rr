@@ -27,6 +27,8 @@ let currentControleId   = null;
 let currentControleNome = null;
 let currentControleOwnerEmail = null;
 let currentUser         = null; // { email, name, picture }
+let currentCartoes      = [];
+let currentComprasParceladas = [];
 
 // ─── Elementos: comuns ────────────────────────────────────────────────────────
 const loginScreen = document.getElementById('login-screen');
@@ -88,6 +90,7 @@ const dashboardMenuButtons = Array.from(document.querySelectorAll('.dashboard-me
 const dashboardAreas = {
   resumo: document.getElementById('area-resumo'),
   lancar: document.getElementById('area-lancar'),
+  investimento: document.getElementById('area-investimento'),
   lancamentos: document.getElementById('area-lancamentos'),
   bancos: document.getElementById('area-bancos'),
   conta: document.getElementById('area-conta'),
@@ -251,6 +254,8 @@ function voltarLobby() {
   currentMembers = [];
   currentPluggyItems = [];
   currentProfile = null;
+  currentCartoes = [];
+  currentComprasParceladas = [];
   setDashboardArea('resumo');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
@@ -319,6 +324,8 @@ async function carregarResponsaveis() {
   currentMembers = await res.json();
   const options = currentMembers.map((member) => ({ value: member.email, label: member.label }));
   setSelectOptions(document.getElementById('input-responsavel'), options, 'Selecione...');
+  setSelectOptions(document.getElementById('inv-responsavel'), options, 'Selecione...');
+  setSelectOptions(document.getElementById('imp-responsavel'), options, 'Selecione...');
   setSelectOptions(filterResp, options, 'Todos');
   setSelectOptions(pluggyResponsavel, options, 'Selecione...');
 }
@@ -580,9 +587,12 @@ async function abrirControle(id, nome, ownerEmail) {
   appScreen.classList.remove('hidden');
   setDashboardArea(currentDashboardArea || 'resumo');
   document.getElementById('input-data').valueAsDate = new Date();
+  document.getElementById('inv-data').valueAsDate = new Date();
   try {
     await carregarResponsaveis();
     await carregarPerfilConta();
+    await carregarCartoes();
+    await carregarComprasParceladas();
     await carregarGastos();
   } catch (err) {
     console.error(err);
@@ -630,28 +640,82 @@ formGasto.addEventListener('submit', async (e) => {
   btnSubmit.textContent = 'Salvando...';
   esconderFeedback();
 
-  const payload = {
-    data:        document.getElementById('input-data').value,
-    valor:       document.getElementById('input-valor').value,
-    tipo:        document.getElementById('input-tipo').value,
-    categoria:   document.getElementById('input-categoria').value,
-    descricao:   document.getElementById('input-descricao').value,
-    responsavel: document.getElementById('input-responsavel').value,
-  };
+  const tipoPagamento = document.getElementById('input-tipo-pagamento').value;
+  const parcelasEl   = document.getElementById('input-parcelas');
+  const cartaoEl     = document.getElementById('input-cartao');
+  const totalParcelas = tipoPagamento === 'credito' ? parseInt(parcelasEl.value || '1', 10) : 1;
+  const cartaoId   = (tipoPagamento === 'credito' || tipoPagamento === 'debito') ? cartaoEl.value : '';
+  const cartaoSelecionado = currentCartoes.find((c) => c.id === cartaoId);
+
+  const dataVal     = document.getElementById('input-data').value;
+  const valorVal    = document.getElementById('input-valor').value;
+  const categoriaVal = document.getElementById('input-categoria').value;
+  const descricaoVal = document.getElementById('input-descricao').value;
+  const responsavelVal = document.getElementById('input-responsavel').value;
+
+  if ((tipoPagamento === 'credito' || tipoPagamento === 'debito') && !cartaoId) {
+    mostrarFeedback('error', 'Selecione o cartão para pagamento com crédito ou débito.');
+    btnSubmit.disabled = false;
+    btnSubmit.textContent = 'Adicionar';
+    return;
+  }
 
   try {
-    const res = await fetch(`${API_URL}/gastos`, {
-      method: 'POST',
-      headers: controleHeaders(),
-      body: JSON.stringify(payload),
-    });
-    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
-    const data = await res.json();
-    if (!res.ok) { mostrarFeedback('error', data.error || 'Erro ao salvar lançamento.'); return; }
-    mostrarFeedback('success', 'Lançamento adicionado com sucesso!');
-    formGasto.reset();
-    document.getElementById('input-data').valueAsDate = new Date();
-    await carregarGastos();
+    if (tipoPagamento === 'credito' && totalParcelas > 1) {
+      // Deleganda para compras parceladas — cria compra + parcelas futuras
+      const res = await fetch(`${API_URL}/compras-parceladas`, {
+        method: 'POST',
+        headers: controleHeaders(),
+        body: JSON.stringify({
+          cartaoId,
+          descricao: descricaoVal,
+          categoria: categoriaVal,
+          responsavel: responsavelVal,
+          valorTotal: valorVal,
+          totalParcelas,
+          dataCompra: dataVal,
+        }),
+      });
+      if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+      const data = await res.json();
+      if (!res.ok) { mostrarFeedback('error', data.error || 'Erro ao salvar compra parcelada.'); return; }
+      mostrarFeedback('success', `Compra parcelada em ${totalParcelas}x criada com sucesso!`);
+      formGasto.reset();
+      document.getElementById('input-data').valueAsDate = new Date();
+      document.getElementById('grupo-cartao').style.display = 'none';
+      document.getElementById('grupo-parcelamento').classList.add('hidden');
+      await carregarGastos();
+      await carregarComprasParceladas();
+    } else {
+      // Lançamento simples (crédito à vista, débito, pix, etc.)
+      const payload = {
+        data: dataVal,
+        valor: valorVal,
+        tipo: 'Gasto',
+        categoria: categoriaVal,
+        descricao: descricaoVal,
+        responsavel: responsavelVal,
+        tipoPagamento,
+        cartaoId:   cartaoSelecionado?.id   || '',
+        cartaoNome: cartaoSelecionado?.cartaoNome || '',
+        numParcela: 1,
+        totalParcelas: 1,
+      };
+      const res = await fetch(`${API_URL}/gastos`, {
+        method: 'POST',
+        headers: controleHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+      const data = await res.json();
+      if (!res.ok) { mostrarFeedback('error', data.error || 'Erro ao salvar lançamento.'); return; }
+      mostrarFeedback('success', 'Lançamento adicionado com sucesso!');
+      formGasto.reset();
+      document.getElementById('input-data').valueAsDate = new Date();
+      document.getElementById('grupo-cartao').style.display = 'none';
+      document.getElementById('grupo-parcelamento').classList.add('hidden');
+      await carregarGastos();
+    }
   } catch {
     mostrarFeedback('error', 'Erro de conexão com o servidor.');
   } finally {
@@ -659,6 +723,44 @@ formGasto.addEventListener('submit', async (e) => {
     btnSubmit.textContent = 'Adicionar';
   }
 });
+
+// Tipo de pagamento → mostrar/ocultar cartão e parcelamento
+document.getElementById('input-tipo-pagamento').addEventListener('change', function () {
+  const tipo = this.value;
+  const grupoCartao = document.getElementById('grupo-cartao');
+  const grupoParcelamento = document.getElementById('grupo-parcelamento');
+  if (tipo === 'credito' || tipo === 'debito') {
+    grupoCartao.style.display = '';
+  } else {
+    grupoCartao.style.display = 'none';
+    document.getElementById('input-cartao').value = '';
+  }
+  if (tipo === 'credito') {
+    grupoParcelamento.classList.remove('hidden');
+  } else {
+    grupoParcelamento.classList.add('hidden');
+    document.getElementById('input-parcelas').value = '1';
+  }
+  atualizarPreviewParcela();
+});
+
+function atualizarPreviewParcela() {
+  const valor = parseFloat(document.getElementById('input-valor').value || '0');
+  const parcelas = parseInt(document.getElementById('input-parcelas').value || '1', 10);
+  const preview = document.getElementById('preview-parcela');
+  if (!preview) return;
+  if (valor > 0 && parcelas > 1) {
+    const porParcela = (valor / parcelas).toFixed(2);
+    preview.textContent = `${formatarValor(porParcela)} / mês`;
+  } else if (valor > 0) {
+    preview.textContent = formatarValor(valor);
+  } else {
+    preview.textContent = '—';
+  }
+}
+
+document.getElementById('input-valor').addEventListener('input', atualizarPreviewParcela);
+document.getElementById('input-parcelas').addEventListener('change', atualizarPreviewParcela);
 
 formConta.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -749,13 +851,18 @@ function renderizarTabela() {
   lista.forEach((g) => {
     const responsavelLabel = getMemberLabel(g.responsavel);
     const bancoLabel = g.banco || 'Manual';
+    const parcelaLabel = g.numParcela && g.totalParcelas && g.totalParcelas > 1
+      ? `${g.numParcela}/${g.totalParcelas}` : '';
+    const tipoPagLabel = g.tipoPagamento ? g.tipoPagamento.charAt(0).toUpperCase() + g.tipoPagamento.slice(1) : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="Data">${formatarData(g.data)}</td>
       <td data-label="Tipo"><span class="tag tag-${g.tipo.toLowerCase()}">${escapeHtml(g.tipo)}</span></td>
+      <td data-label="Pagamento">${tipoPagLabel ? `<span class="tag tag-pagamento">${escapeHtml(tipoPagLabel)}</span>` : '—'}</td>
       <td data-label="Categoria">${escapeHtml(g.categoria)}</td>
       <td data-label="Descrição">${escapeHtml(g.descricao) || '—'}</td>
       <td data-label="Banco"><span class="tag tag-bank">${escapeHtml(bancoLabel)}</span></td>
+      <td data-label="Parcela">${parcelaLabel ? `<span class="tag tag-parcela">${escapeHtml(parcelaLabel)}</span>` : '—'}</td>
       <td data-label="Responsável"><span class="tag tag-member">${escapeHtml(responsavelLabel)}</span></td>
       <td data-label="Valor" class="text-right ${g.tipo === 'Gasto' ? 'valor-gasto' : 'valor-investimento'}">
         ${formatarValor(g.valor)}
@@ -850,6 +957,240 @@ function formatarData(iso) {
   const [ano, mes, dia] = iso.split('T')[0].split('-');
   return `${dia}/${mes}/${ano}`;
 }
+
+// ─── Investimento: formulário ──────────────────────────────────────────────────
+document.getElementById('form-investimento').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btnInv = document.getElementById('btn-submit-inv');
+  const invFeedback = document.getElementById('inv-feedback');
+  btnInv.disabled = true;
+  btnInv.textContent = 'Salvando...';
+  invFeedback.classList.add('hidden');
+
+  const payload = {
+    data:        document.getElementById('inv-data').value,
+    valor:       document.getElementById('inv-valor').value,
+    tipo:        'Investimento',
+    categoria:   document.getElementById('inv-categoria').value,
+    descricao:   document.getElementById('inv-descricao').value,
+    responsavel: document.getElementById('inv-responsavel').value,
+  };
+
+  try {
+    const res = await fetch(`${API_URL}/gastos`, {
+      method: 'POST',
+      headers: controleHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await res.json();
+    if (!res.ok) { mostrarFeedbackEl(invFeedback, 'error', data.error || 'Erro ao salvar investimento.'); return; }
+    mostrarFeedbackEl(invFeedback, 'success', 'Investimento registrado com sucesso!');
+    document.getElementById('form-investimento').reset();
+    document.getElementById('inv-data').valueAsDate = new Date();
+    await carregarGastos();
+  } catch {
+    mostrarFeedbackEl(invFeedback, 'error', 'Erro de conexão com o servidor.');
+  } finally {
+    btnInv.disabled = false;
+    btnInv.textContent = 'Adicionar';
+  }
+});
+
+// ─── Cartões: carregar e renderizar ───────────────────────────────────────────
+async function carregarCartoes() {
+  try {
+    const res = await fetch(`${API_URL}/cartoes`, { headers: authHeaders() });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar cartões');
+    currentCartoes = await res.json();
+    renderCartoes();
+    atualizarSeletoresCartao();
+  } catch (err) {
+    console.warn('Erro ao carregar cartões:', err.message);
+  }
+}
+
+function atualizarSeletoresCartao() {
+  const options = currentCartoes.map((c) => ({
+    value: c.id,
+    label: `${escapeHtml(c.cartaoNome)}${c.finalCartao ? ' *' + c.finalCartao : ''} (${escapeHtml(c.bancoNome)})`,
+  }));
+  const cartaoSelect = document.getElementById('input-cartao');
+  const impCartaoSelect = document.getElementById('imp-cartao');
+  const prevVal1 = cartaoSelect?.value;
+  const prevVal2 = impCartaoSelect?.value;
+
+  if (cartaoSelect) {
+    cartaoSelect.innerHTML = '<option value="">Selecione o cartão...</option>';
+    options.forEach((o) => {
+      const el = document.createElement('option');
+      el.value = o.value;
+      el.textContent = o.label;
+      cartaoSelect.appendChild(el);
+    });
+    if (options.some((o) => o.value === prevVal1)) cartaoSelect.value = prevVal1;
+  }
+  if (impCartaoSelect) {
+    impCartaoSelect.innerHTML = '<option value="">Selecione...</option>';
+    options.forEach((o) => {
+      const el = document.createElement('option');
+      el.value = o.value;
+      el.textContent = o.label;
+      impCartaoSelect.appendChild(el);
+    });
+    if (options.some((o) => o.value === prevVal2)) impCartaoSelect.value = prevVal2;
+  }
+}
+
+function renderCartoes() {
+  const lista = document.getElementById('lista-cartoes');
+  if (!lista) return;
+  if (currentCartoes.length === 0) {
+    lista.innerHTML = '<p class="empty-state-inline">Nenhum cartão cadastrado ainda.</p>';
+    return;
+  }
+  lista.innerHTML = currentCartoes.map((c) => `
+    <div class="cartao-item" data-id="${escapeHtml(c.id)}">
+      <div class="cartao-info">
+        <span class="cartao-nome">${escapeHtml(c.cartaoNome)}${c.finalCartao ? ' <span class="cartao-final">*' + escapeHtml(c.finalCartao) + '</span>' : ''}</span>
+        <span class="cartao-banco">${escapeHtml(c.bancoNome)}</span>
+        <span class="cartao-tipo tag">${escapeHtml(c.tipoCartao)}</span>
+        ${c.bandeira ? `<span class="cartao-bandeira tag">${escapeHtml(c.bandeira)}</span>` : ''}
+      </div>
+      <button class="btn btn-danger btn-sm btn-remover-cartao" data-id="${escapeHtml(c.id)}">Remover</button>
+    </div>
+  `).join('');
+
+  lista.querySelectorAll('.btn-remover-cartao').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Inativar este cartão?')) return;
+      try {
+        const res = await fetch(`${API_URL}/cartoes/${encodeURIComponent(btn.dataset.id)}`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erro ao remover cartão');
+        await carregarCartoes();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
+}
+
+document.getElementById('form-cartao').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const cartaoFeedback = document.getElementById('cartao-feedback');
+  cartaoFeedback.classList.add('hidden');
+  const btnAdd = e.target.querySelector('button[type="submit"]');
+  btnAdd.disabled = true;
+
+  const payload = {
+    bancoNome:   document.getElementById('cartao-banco').value.trim(),
+    cartaoNome:  document.getElementById('cartao-nome').value.trim(),
+    finalCartao: document.getElementById('cartao-final').value.trim(),
+    bandeira:    document.getElementById('cartao-bandeira').value,
+    tipoCartao:  document.getElementById('cartao-tipo').value,
+  };
+
+  try {
+    const res = await fetch(`${API_URL}/cartoes`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao cadastrar cartão');
+    mostrarFeedbackEl(cartaoFeedback, 'success', 'Cartão cadastrado com sucesso!');
+    e.target.reset();
+    await carregarCartoes();
+  } catch (err) {
+    mostrarFeedbackEl(cartaoFeedback, 'error', err.message);
+  } finally {
+    btnAdd.disabled = false;
+  }
+});
+
+// ─── Compras parceladas: carregar e renderizar ────────────────────────────────
+async function carregarComprasParceladas() {
+  if (!currentControleId) return;
+  try {
+    const res = await fetch(`${API_URL}/compras-parceladas`, { headers: controleHeaders() });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar compras parceladas');
+    currentComprasParceladas = await res.json();
+    renderComprasParceladas();
+  } catch (err) {
+    console.warn('Erro ao carregar compras parceladas:', err.message);
+  }
+}
+
+function renderComprasParceladas() {
+  const lista = document.getElementById('lista-compras');
+  if (!lista) return;
+  if (currentComprasParceladas.length === 0) {
+    lista.innerHTML = '<p class="empty-state-inline">Nenhuma compra parcelada registrada.</p>';
+    return;
+  }
+  lista.innerHTML = currentComprasParceladas.map((c) => {
+    const cartao = currentCartoes.find((k) => k.id === c.cartaoId);
+    const cartaoLabel = cartao ? `${escapeHtml(cartao.cartaoNome)} (${escapeHtml(cartao.bancoNome)})` : escapeHtml(c.cartaoId);
+    return `
+    <div class="compra-item">
+      <div class="compra-info">
+        <span class="compra-nome">${escapeHtml(c.descricao)}</span>
+        <span class="compra-cartao">${cartaoLabel}</span>
+        <span class="compra-parcela tag">${escapeHtml(String(c.parcelaAtual))}/${escapeHtml(String(c.totalParcelas))} parcelas</span>
+        <span class="compra-valor">${formatarValor(c.valorParcela)}/mês</span>
+      </div>
+      <span class="tag tag-status-${(c.status || 'ativa').toLowerCase()}">${escapeHtml(c.status || 'ativa')}</span>
+    </div>
+    `;
+  }).join('');
+}
+
+document.getElementById('form-importar-parcela').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const impFeedback = document.getElementById('imp-feedback');
+  impFeedback.classList.add('hidden');
+  const btnImp = e.target.querySelector('button[type="submit"]');
+  btnImp.disabled = true;
+  btnImp.textContent = 'Importando...';
+
+  const payload = {
+    cartaoId:           document.getElementById('imp-cartao').value,
+    descricao:          document.getElementById('imp-descricao').value.trim(),
+    categoria:          document.getElementById('imp-categoria').value,
+    responsavel:        document.getElementById('imp-responsavel').value,
+    valorParcela:       document.getElementById('imp-valor-parcela').value,
+    parcelaAtual:       document.getElementById('imp-parcela-atual').value,
+    totalParcelas:      document.getElementById('imp-total-parcelas').value,
+    parcelasRestantes:  document.getElementById('imp-parcelas-restantes').value,
+    dataProximaParcela: document.getElementById('imp-proxima-data').value,
+  };
+
+  try {
+    const res = await fetch(`${API_URL}/compras-parceladas/importar-existente`, {
+      method: 'POST',
+      headers: controleHeaders(),
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao importar parcelamento');
+    mostrarFeedbackEl(impFeedback, 'success', `Parcelamento importado! ${data.parcelasGeradas} parcelas programadas.`);
+    e.target.reset();
+    await carregarComprasParceladas();
+  } catch (err) {
+    mostrarFeedbackEl(impFeedback, 'error', err.message);
+  } finally {
+    btnImp.disabled = false;
+    btnImp.textContent = 'Importar parcelamento';
+  }
+});
 
 // ─── Pluggy: Importação bancária ──────────────────────────────────────────────────
 function getSelectedPluggyItemIds() {

@@ -36,22 +36,30 @@ router.get('/', async (req, res) => {
 
     const response = await getServiceSheets().spreadsheets.values.get({
       spreadsheetId: MASTER_ID(),
-      range: `${controle.spreadsheetId}!A2:K`,
+      range: `${controle.spreadsheetId}!A2:S`,
     });
 
     const rows = response.data.values || [];
     const gastos = rows.map((row) => ({
-      id:           row[0] || '',
-      data:         row[1] || '',
-      valor:        row[2] || '',
-      categoria:    row[3] || '',
-      descricao:    row[4] || '',
-      responsavel:  row[5] || '',
-      tipo:         row[6] || '',
-      dataRegistro: row[7] || '',
-      banco:        row[8] || '',
-      pluggyItemId: row[9] || '',
-      contaId:      row[10] || '',
+      id:                  row[0]  || '',
+      data:                row[1]  || '',
+      valor:               row[2]  || '',
+      categoria:           row[3]  || '',
+      descricao:           row[4]  || '',
+      responsavel:         row[5]  || '',
+      tipo:                row[6]  || '',
+      dataRegistro:        row[7]  || '',
+      banco:               row[8]  || '',
+      pluggyItemId:        row[9]  || '',
+      contaId:             row[10] || '',
+      tipoPagamento:       row[11] || '',
+      cartaoId:            row[12] || '',
+      cartaoNome:          row[13] || '',
+      compraParceladaId:   row[14] || '',
+      numParcela:          row[15] || '',
+      totalParcelas:       row[16] || '',
+      valorOriginalCompra: row[17] || '',
+      statusParcela:       row[18] || '',
     }));
 
     res.json(gastos);
@@ -63,7 +71,11 @@ router.get('/', async (req, res) => {
 
 // ─── POST /gastos ─────────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { data, valor, categoria, descricao, responsavel, tipo } = req.body;
+  const {
+    data, valor, categoria, descricao, responsavel, tipo,
+    tipoPagamento, cartaoId, cartaoNome,
+    compraParceladaId, numParcela, totalParcelas, valorOriginalCompra, statusParcela,
+  } = req.body;
 
   if (!data || !valor || !categoria || !responsavel || !tipo) {
     return res.status(400).json({ error: 'Campos obrigatórios: data, valor, categoria, responsavel, tipo' });
@@ -72,6 +84,12 @@ router.post('/', async (req, res) => {
   const valorNumerico = parseFloat(String(valor).replace(',', '.'));
   if (isNaN(valorNumerico) || valorNumerico <= 0) {
     return res.status(400).json({ error: 'Valor inválido' });
+  }
+
+  const tiposPag = ['debito', 'credito', 'pix', 'boleto', 'dinheiro', 'outro'];
+  const tipoPag = tipoPagamento ? String(tipoPagamento).toLowerCase() : '';
+  if (tipoPag && !tiposPag.includes(tipoPag)) {
+    return res.status(400).json({ error: 'tipoPagamento inválido' });
   }
 
   try {
@@ -83,11 +101,22 @@ router.post('/', async (req, res) => {
 
     await getServiceSheets().spreadsheets.values.append({
       spreadsheetId: MASTER_ID(),
-      range: `${controle.spreadsheetId}!A:K`,
+      range: `${controle.spreadsheetId}!A:S`,
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
-        values: [[id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipo, dataRegistro, 'Manual', '', '']],
+        values: [[
+          id, data, valorNumerico.toFixed(2), categoria, descricao || '', responsavel, tipo, dataRegistro,
+          'Manual', '', '',
+          tipoPag || '',
+          cartaoId    ? String(cartaoId).trim()    : '',
+          cartaoNome  ? String(cartaoNome).trim()  : '',
+          compraParceladaId ? String(compraParceladaId).trim() : '',
+          numParcela        ? String(numParcela)         : '',
+          totalParcelas     ? String(totalParcelas)      : '',
+          valorOriginalCompra ? parseFloat(String(valorOriginalCompra).replace(',', '.')).toFixed(2) : '',
+          statusParcela ? String(statusParcela).trim() : '',
+        ]],
       },
     });
 
