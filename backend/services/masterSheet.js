@@ -23,6 +23,14 @@ function getServiceSheets() {
   return _sheets;
 }
 
+function parseBooleanCell(value, fallback = false) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['true', '1', 'yes', 'sim'].includes(raw)) return true;
+  if (['false', '0', 'no', 'nao', 'não'].includes(raw)) return false;
+  return fallback;
+}
+
 const MASTER_ID = () => process.env.MASTER_SPREADSHEET_ID;
 
 // ─── Helpers internos ────────────────────────────────────────────────────────
@@ -121,11 +129,11 @@ async function setupMasterSheet() {
   const existing = spreadsheet.data.sheets.map(s => s.properties.title);
 
   const tabs = [
-    { name: 'Controles', headers: ['id', 'nome', 'owner_email', 'spreadsheet_id', 'created_at'] },
-    { name: 'Membros',   headers: ['controle_id', 'email', 'role', 'joined_at'] },
+    { name: 'Controles', headers: ['id', 'nome', 'owner_email', 'spreadsheet_id', 'created_at', 'tipo_controle'] },
+    { name: 'Membros',   headers: ['controle_id', 'email', 'role', 'joined_at', 'setup_controle_concluido', 'cartoes_habilitados'] },
     { name: 'Codigos',   headers: ['controle_id', 'code', 'expires_at'] },
     { name: 'PluggyItems', headers: ['controle_id', 'member_email', 'item_id', 'connector_name', 'connector_type', 'created_at', 'updated_at'] },
-    { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at', 'renda_mensal_base'] },
+    { name: 'Usuarios', headers: ['email', 'display_name', 'phone', 'picture_url', 'created_at', 'updated_at', 'renda_mensal_base', 'tipo_renda', 'setup_conta_concluido'] },
     { name: 'CartoesUsuario', headers: ['id', 'user_email', 'banco_nome', 'cartao_nome', 'final_cartao', 'bandeira', 'tipo_cartao', 'active', 'created_at', 'updated_at', 'dia_fechamento_fatura', 'dia_vencimento_fatura', 'origem_cartao', 'pluggy_item_id', 'pluggy_account_id', 'nome_original'] },
     { name: 'ComprasParceladas', headers: ['id', 'controle_id', 'user_email', 'cartao_id', 'descricao', 'categoria', 'responsavel', 'valor_total', 'total_parcelas', 'parcela_atual', 'valor_parcela', 'data_compra', 'status', 'created_at', 'updated_at'] },
     { name: 'ParcelasProgramadas', headers: ['id', 'compra_id', 'controle_id', 'cartao_id', 'numero_parcela', 'valor_parcela', 'data_prevista', 'status', 'gasto_id', 'created_at', 'updated_at'] },
@@ -163,14 +171,14 @@ async function getControlesDoUsuario(email) {
   const controles = await readTab('Controles');
   return controles
     .filter(r => ids.includes(r[0]))
-    .map(r => ({ id: r[0], nome: r[1], ownerEmail: r[2], spreadsheetId: r[3], createdAt: r[4] }));
+    .map(r => ({ id: r[0], nome: r[1], ownerEmail: r[2], spreadsheetId: r[3], createdAt: r[4], tipoControle: r[5] || '' }));
 }
 
 async function getControleById(id) {
   const rows = await readTab('Controles');
   const r = rows.find(r => r[0] === id);
   if (!r) return null;
-  return { id: r[0], nome: r[1], ownerEmail: r[2], spreadsheetId: r[3], createdAt: r[4] };
+  return { id: r[0], nome: r[1], ownerEmail: r[2], spreadsheetId: r[3], createdAt: r[4], tipoControle: r[5] || '' };
 }
 
 async function createControle(nome, ownerEmail) {
@@ -197,15 +205,15 @@ async function createControle(nome, ownerEmail) {
 
   const createdAt = new Date().toISOString();
   // Armazena tabName no campo spreadsheet_id — gastos.js usa como nome da aba
-  await appendRow('Controles', [id, nome, ownerEmail, tabName, createdAt]);
-  await appendRow('Membros',   [id, ownerEmail, 'owner', createdAt]);
+  await appendRow('Controles', [id, nome, ownerEmail, tabName, createdAt, '']);
+  await appendRow('Membros',   [id, ownerEmail, 'owner', createdAt, 'false', '']);
 
   // Código de convite inicial
   const code      = randomBytes(4).toString('hex').toUpperCase();
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   await appendRow('Codigos', [id, code, expiresAt]);
 
-  return { id, nome, ownerEmail, spreadsheetId: tabName, createdAt };
+  return { id, nome, ownerEmail, spreadsheetId: tabName, createdAt, tipoControle: '' };
 }
 
 // ─── Membros ─────────────────────────────────────────────────────────────────
@@ -213,7 +221,71 @@ async function getMembros(controleId) {
   const rows = await readTab('Membros');
   return rows
     .filter(r => r[0] === controleId)
-    .map(r => ({ controleId: r[0], email: r[1], role: r[2], joinedAt: r[3] }));
+    .map(r => ({
+      controleId: r[0],
+      email: r[1],
+      role: r[2],
+      joinedAt: r[3],
+      setupControleConcluido: parseBooleanCell(r[4], false),
+      cartoesHabilitados: String(r[5] || '').split(',').map((id) => id.trim()).filter(Boolean),
+    }));
+}
+
+async function getMembroControleSetup(controleId, email) {
+  const normalizedEmail = String(email || '').toLowerCase();
+  const rows = await readTab('Membros');
+  const row = rows.find((item) => item[0] === controleId && String(item[1] || '').toLowerCase() === normalizedEmail);
+  if (!row) return null;
+  return {
+    setupControleConcluido: parseBooleanCell(row[4], false),
+    cartoesHabilitados: String(row[5] || '').split(',').map((id) => id.trim()).filter(Boolean),
+  };
+}
+
+async function updateMembroControleSetup(controleId, email, updates = {}) {
+  const normalizedEmail = String(email || '').toLowerCase();
+  const rows = await readTab('Membros');
+  const index = rows.findIndex((item) => item[0] === controleId && String(item[1] || '').toLowerCase() === normalizedEmail);
+  if (index === -1) throw new Error('Membro não encontrado');
+
+  const existing = rows[index];
+  const setupControleConcluido = updates.setupControleConcluido !== undefined
+    ? (updates.setupControleConcluido ? 'true' : 'false')
+    : (existing[4] || 'false');
+  const cartoesHabilitados = updates.cartoesHabilitados !== undefined
+    ? (Array.isArray(updates.cartoesHabilitados)
+      ? updates.cartoesHabilitados.map((id) => String(id || '').trim()).filter(Boolean).join(',')
+      : '')
+    : (existing[5] || '');
+
+  await updateRow('Membros', index, [
+    existing[0] || controleId,
+    existing[1] || normalizedEmail,
+    existing[2] || 'member',
+    existing[3] || new Date().toISOString(),
+    setupControleConcluido,
+    cartoesHabilitados,
+  ]);
+
+  return {
+    setupControleConcluido: parseBooleanCell(setupControleConcluido, false),
+    cartoesHabilitados: cartoesHabilitados.split(',').map((id) => id.trim()).filter(Boolean),
+  };
+}
+
+async function updateControleTipo(controleId, tipoControle) {
+  const rows = await readTab('Controles');
+  const index = rows.findIndex((row) => row[0] === controleId);
+  if (index === -1) throw new Error('Controle não encontrado');
+  const existing = rows[index];
+  await updateRow('Controles', index, [
+    existing[0] || '',
+    existing[1] || '',
+    existing[2] || '',
+    existing[3] || '',
+    existing[4] || '',
+    String(tipoControle || '').trim(),
+  ]);
 }
 
 async function getResponsavelOptions(controleId) {
@@ -300,6 +372,8 @@ function mapUserProfile(row) {
     createdAt: row[4] || '',
     updatedAt: row[5] || '',
     rendaMensalBase: row[6] || '0',
+    tipoRenda: row[7] || 'fixa',
+    setupContaConcluido: parseBooleanCell(row[8], false),
   };
 }
 
@@ -317,7 +391,9 @@ async function getOrCreateUserProfile(email, defaults = {}) {
   const pictureUrl = String(defaults.pictureUrl || defaults.picture || '').trim();
 
   const rendaMensalBase = parseFloat(String(defaults.rendaMensalBase || 0).replace(',', '.')) || 0;
-  await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now, rendaMensalBase.toFixed(2)]);
+  const tipoRenda = String(defaults.tipoRenda || 'fixa').trim().toLowerCase() === 'variavel' ? 'variavel' : 'fixa';
+  const setupContaConcluido = defaults.setupContaConcluido === true ? 'true' : 'false';
+  await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now, rendaMensalBase.toFixed(2), tipoRenda, setupContaConcluido]);
   return {
     email: normalizedEmail,
     displayName,
@@ -326,6 +402,8 @@ async function getOrCreateUserProfile(email, defaults = {}) {
     createdAt: now,
     updatedAt: now,
     rendaMensalBase: rendaMensalBase.toFixed(2),
+    tipoRenda,
+    setupContaConcluido: setupContaConcluido === 'true',
   };
 }
 
@@ -342,7 +420,9 @@ async function updateUserProfile(email, updates = {}) {
     const phone = String(updates.phone || '').trim();
     const pictureUrl = String(updates.pictureUrl || updates.picture || '').trim();
     const rendaMensalBase = parseFloat(String(updates.rendaMensalBase || 0).replace(',', '.')) || 0;
-    await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now, rendaMensalBase.toFixed(2)]);
+    const tipoRenda = String(updates.tipoRenda || 'fixa').trim().toLowerCase() === 'variavel' ? 'variavel' : 'fixa';
+    const setupContaConcluido = updates.setupContaConcluido === true ? 'true' : 'false';
+    await appendRow('Usuarios', [normalizedEmail, displayName, phone, pictureUrl, now, now, rendaMensalBase.toFixed(2), tipoRenda, setupContaConcluido]);
     return {
       email: normalizedEmail,
       displayName,
@@ -351,6 +431,8 @@ async function updateUserProfile(email, updates = {}) {
       createdAt: now,
       updatedAt: now,
       rendaMensalBase: rendaMensalBase.toFixed(2),
+      tipoRenda,
+      setupContaConcluido: setupContaConcluido === 'true',
     };
   }
 
@@ -367,6 +449,12 @@ async function updateUserProfile(email, updates = {}) {
   const nextRendaMensalBase = updates.rendaMensalBase !== undefined
     ? ((parseFloat(String(updates.rendaMensalBase || 0).replace(',', '.')) || 0).toFixed(2))
     : ((parseFloat(String(existing[6] || 0).replace(',', '.')) || 0).toFixed(2));
+  const nextTipoRenda = updates.tipoRenda !== undefined
+    ? (String(updates.tipoRenda || 'fixa').trim().toLowerCase() === 'variavel' ? 'variavel' : 'fixa')
+    : (String(existing[7] || 'fixa').trim().toLowerCase() === 'variavel' ? 'variavel' : 'fixa');
+  const nextSetupContaConcluido = updates.setupContaConcluido !== undefined
+    ? (updates.setupContaConcluido ? 'true' : 'false')
+    : (existing[8] || 'false');
   const createdAt = existing[4] || now;
 
   await updateRow('Usuarios', index, [
@@ -377,6 +465,8 @@ async function updateUserProfile(email, updates = {}) {
     createdAt,
     now,
     nextRendaMensalBase,
+    nextTipoRenda,
+    nextSetupContaConcluido,
   ]);
 
   return {
@@ -387,6 +477,8 @@ async function updateUserProfile(email, updates = {}) {
     createdAt,
     updatedAt: now,
     rendaMensalBase: nextRendaMensalBase,
+    tipoRenda: nextTipoRenda,
+    setupContaConcluido: parseBooleanCell(nextSetupContaConcluido, false),
   };
 }
 
@@ -852,7 +944,7 @@ async function joinByCode(code, email) {
     return { success: false, error: 'Você já é membro deste controle' };
   }
 
-  await appendRow('Membros', [controleId, email, 'member', new Date().toISOString()]);
+  await appendRow('Membros', [controleId, email, 'member', new Date().toISOString(), 'false', '']);
   const controle = await getControleById(controleId);
   return { success: true, controle };
 }
@@ -864,6 +956,9 @@ module.exports = {
   getControleById,
   createControle,
   getMembros,
+  getMembroControleSetup,
+  updateMembroControleSetup,
+  updateControleTipo,
   getResponsavelOptions,
   isMembro,
   removeMembro,

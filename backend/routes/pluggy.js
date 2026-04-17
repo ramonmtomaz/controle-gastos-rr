@@ -149,6 +149,38 @@ router.post('/connect-token', async (req, res) => {
   }
 });
 
+// ─── POST /pluggy/setup-item ────────────────────────────────────────────────
+// Vincula item Pluggy durante o setup inicial da conta e sincroniza cartões.
+router.post('/setup-item', async (req, res) => {
+  const { itemId } = req.body || {};
+  if (!itemId) {
+    return res.status(400).json({ error: 'itemId é obrigatório' });
+  }
+
+  try {
+    const apiKey = await getPluggyApiKey();
+    const itemRes = await pluggyRequest('GET', `/items/${encodeURIComponent(itemId)}`, null, apiKey);
+    if (itemRes.status !== 200) {
+      throw new Error('Não foi possível carregar os dados do banco conectado');
+    }
+
+    const connectorName = itemRes.body?.connector?.name || itemRes.body?.institution?.name || 'Banco conectado';
+    const connectorType = itemRes.body?.connector?.type || itemRes.body?.type || '';
+    const cartoesSincronizados = await sincronizarCartoesPluggyDoItem(apiKey, req.user.email, itemId, connectorName);
+
+    res.status(201).json({
+      itemId,
+      memberEmail: req.user.email,
+      connectorName,
+      connectorType,
+      cartoesSincronizados: cartoesSincronizados.length,
+    });
+  } catch (err) {
+    console.error('Erro ao salvar item Pluggy no setup:', err);
+    res.status(500).json({ error: err.message || 'Erro ao vincular banco no setup da conta' });
+  }
+});
+
 // ─── GET /pluggy/items ───────────────────────────────────────────────────────
 router.get('/items', async (req, res) => {
   try {

@@ -98,7 +98,7 @@ router.get('/profile', requireAuth, async (req, res) => {
 
 // PATCH /auth/profile — atualiza nome exibido e telefone
 router.patch('/profile', requireAuth, async (req, res) => {
-  const { displayName, phone, rendaMensalBase } = req.body || {};
+  const { displayName, phone, rendaMensalBase, tipoRenda, setupContaConcluido } = req.body || {};
 
   if (displayName !== undefined && !String(displayName).trim()) {
     return res.status(400).json({ error: 'Nome exibido é obrigatório' });
@@ -107,6 +107,15 @@ router.patch('/profile', requireAuth, async (req, res) => {
   const sanitizedPhone = phone === undefined
     ? undefined
     : String(phone).replace(/[^0-9()+\-\s]/g, '').trim();
+
+  let tipoRendaNormalizado;
+  if (tipoRenda !== undefined) {
+    const tipo = String(tipoRenda || '').trim().toLowerCase();
+    if (!['fixa', 'variavel'].includes(tipo)) {
+      return res.status(400).json({ error: 'tipoRenda inválido. Use fixa ou variavel' });
+    }
+    tipoRendaNormalizado = tipo;
+  }
 
   let rendaNormalizada;
   if (rendaMensalBase !== undefined) {
@@ -117,12 +126,22 @@ router.patch('/profile', requireAuth, async (req, res) => {
     rendaNormalizada = numero.toFixed(2);
   }
 
+  const setupConta = setupContaConcluido === undefined
+    ? undefined
+    : Boolean(setupContaConcluido);
+
+  if (tipoRendaNormalizado === 'variavel' && rendaMensalBase === undefined) {
+    rendaNormalizada = '0.00';
+  }
+
   try {
     const profile = await updateUserProfile(req.user.email, {
       displayName,
       phone: sanitizedPhone,
       pictureUrl: req.user.picture,
       rendaMensalBase: rendaNormalizada,
+      tipoRenda: tipoRendaNormalizado,
+      setupContaConcluido: setupConta,
     });
     res.json({ profile });
   } catch (err) {

@@ -33,12 +33,47 @@ let currentComprasParceladas = [];
 let currentRendasExtras = [];
 let rendaGeralAtual = null;
 let currentSugestoesParcelamento = [];
+let currentSetupControle = null;
+let currentSetupContaCartoes = [];
 
 // ─── Elementos: comuns ────────────────────────────────────────────────────────
 const loginScreen = document.getElementById('login-screen');
+const profileSetupScreen = document.getElementById('profile-setup-screen');
+const controleSetupScreen = document.getElementById('controle-setup-screen');
 const lobbyScreen = document.getElementById('lobby-screen');
 const appScreen   = document.getElementById('app');
 const btnLogin    = document.getElementById('btn-login');
+const setupUserName = document.getElementById('setup-user-name');
+const setupUserPicture = document.getElementById('setup-user-picture');
+const btnSetupLogout = document.getElementById('btn-setup-logout');
+const formSetupConta = document.getElementById('form-setup-conta');
+const setupDisplayName = document.getElementById('setup-display-name');
+const setupTipoRenda = document.getElementById('setup-tipo-renda');
+const setupRendaBase = document.getElementById('setup-renda-base');
+const setupGrupoRendaBase = document.getElementById('setup-grupo-renda-base');
+const setupCartaoModo = document.getElementById('setup-cartao-modo');
+const setupCartaoManualBox = document.getElementById('setup-cartao-manual-box');
+const setupCartaoPluggyBox = document.getElementById('setup-cartao-pluggy-box');
+const setupListaCartoes = document.getElementById('setup-lista-cartoes');
+const setupContaFeedback = document.getElementById('setup-conta-feedback');
+const btnSetupContaConcluir = document.getElementById('btn-setup-conta-concluir');
+const btnSetupAddCartao = document.getElementById('btn-setup-add-cartao');
+const btnSetupConectarPluggy = document.getElementById('btn-setup-conectar-pluggy');
+
+const setupCartaoBanco = document.getElementById('setup-cartao-banco');
+const setupCartaoNome = document.getElementById('setup-cartao-nome');
+const setupCartaoFinal = document.getElementById('setup-cartao-final');
+const setupCartaoTipo = document.getElementById('setup-cartao-tipo');
+const setupCartaoFechamento = document.getElementById('setup-cartao-fechamento');
+const setupCartaoVencimento = document.getElementById('setup-cartao-vencimento');
+
+const formSetupControle = document.getElementById('form-setup-controle');
+const controleSetupNome = document.getElementById('controle-setup-nome');
+const btnControleSetupVoltar = document.getElementById('btn-controle-setup-voltar');
+const setupTipoControle = document.getElementById('setup-tipo-controle');
+const setupControleCartoes = document.getElementById('setup-controle-cartoes');
+const setupControleFeedback = document.getElementById('setup-controle-feedback');
+const btnSetupControleSalvar = document.getElementById('btn-setup-controle-salvar');
 
 // ─── Elementos: lobby ─────────────────────────────────────────────────────────
 const lobbyUserName    = document.getElementById('lobby-user-name');
@@ -187,11 +222,16 @@ const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
     const res = await fetch(`${API_URL}/auth/me`, { headers: authHeaders() });
     if (res.ok) {
       const { user } = await res.json();
-      mostrarLobby(user);
       try {
         await carregarPerfilConta();
+        if (isContaSetupConcluido(currentProfile)) {
+          mostrarLobby(user);
+        } else {
+          mostrarTelaSetupConta(user);
+        }
       } catch (err) {
         console.warn('Perfil não carregado na inicialização:', err.message);
+        mostrarLobby(user);
       }
     } else {
       removeToken();
@@ -205,6 +245,8 @@ const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
 // ─── Controle de telas ────────────────────────────────────────────────────────
 function mostrarTelaLogin() {
   loginScreen.classList.remove('hidden');
+  profileSetupScreen.classList.add('hidden');
+  controleSetupScreen.classList.add('hidden');
   lobbyScreen.classList.add('hidden');
   appScreen.classList.add('hidden');
 }
@@ -225,9 +267,52 @@ function mostrarLobby(user) {
     });
   }
   loginScreen.classList.add('hidden');
+  profileSetupScreen.classList.add('hidden');
+  controleSetupScreen.classList.add('hidden');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
   carregarControles();
+}
+
+function isContaSetupConcluido(profile) {
+  if (!profile) return false;
+  return Boolean(profile.setupContaConcluido);
+}
+
+function mostrarTelaSetupConta(user) {
+  if (user) {
+    currentUser = user;
+  }
+
+  loginScreen.classList.add('hidden');
+  lobbyScreen.classList.add('hidden');
+  appScreen.classList.add('hidden');
+  controleSetupScreen.classList.add('hidden');
+  profileSetupScreen.classList.remove('hidden');
+
+  const nome = currentProfile?.displayName || currentUser?.name || '';
+  const foto = currentProfile?.pictureUrl || currentUser?.picture || '';
+  const tipoRenda = String(currentProfile?.tipoRenda || 'fixa').toLowerCase() === 'variavel' ? 'variavel' : 'fixa';
+  const rendaBase = parseFloat(String(currentProfile?.rendaMensalBase || '0').replace(',', '.')) || 0;
+
+  setupUserName.textContent = nome || 'Usuário';
+  setupUserPicture.src = foto;
+  setupUserPicture.alt = nome || 'Usuário';
+  setupDisplayName.value = nome;
+  setupTipoRenda.value = tipoRenda;
+  setupRendaBase.value = rendaBase;
+  atualizarVisibilidadeRendaSetupConta();
+  atualizarVisibilidadeModoCartaoSetup();
+  setupContaFeedback.classList.add('hidden');
+  carregarCartoesSetupConta();
+}
+
+function mostrarTelaSetupControle() {
+  loginScreen.classList.add('hidden');
+  profileSetupScreen.classList.add('hidden');
+  lobbyScreen.classList.add('hidden');
+  appScreen.classList.add('hidden');
+  controleSetupScreen.classList.remove('hidden');
 }
 
 function updateDisplayedUserInfo({ name, picture }) {
@@ -296,6 +381,288 @@ async function carregarPerfilConta() {
   });
 }
 
+function atualizarVisibilidadeRendaSetupConta() {
+  const tipo = String(setupTipoRenda?.value || 'fixa').toLowerCase();
+  const isFixa = tipo === 'fixa';
+  setupGrupoRendaBase.classList.toggle('hidden', !isFixa);
+  setupRendaBase.required = isFixa;
+  if (!isFixa) setupRendaBase.value = '0';
+}
+
+function atualizarVisibilidadeModoCartaoSetup() {
+  const modo = String(setupCartaoModo?.value || 'manual').toLowerCase();
+  setupCartaoManualBox.classList.toggle('hidden', modo !== 'manual');
+  setupCartaoPluggyBox.classList.toggle('hidden', modo !== 'pluggy');
+}
+
+async function conectarBancoPluggyNoSetup() {
+  btnSetupConectarPluggy.disabled = true;
+  btnSetupConectarPluggy.textContent = 'Conectando...';
+  setupContaFeedback.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API_URL}/pluggy/connect-token`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await safeReadResponseJson(res);
+    if (!res.ok) throw new Error(data.error || 'Erro ao obter token de conexão');
+
+    const PluggyConnectCtor = window.PluggyConnect;
+    if (!PluggyConnectCtor) {
+      throw new Error('PluggyConnect nao carregou. Recarregue a pagina e tente novamente.');
+    }
+
+    const pluggyConnect = new PluggyConnectCtor({
+      connectToken: data.connectToken,
+      includeSandbox: true,
+      onSuccess: async (payload) => {
+        const resolvedItemId = payload?.item?.id || payload?.itemId || payload?.id || null;
+        if (!resolvedItemId) {
+          mostrarFeedbackEl(setupContaFeedback, 'error', 'Nao foi possivel identificar a conta conectada.');
+          return;
+        }
+
+        try {
+          const saveRes = await fetch(`${API_URL}/pluggy/setup-item`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ itemId: resolvedItemId }),
+          });
+          if (saveRes.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+          const saveData = await safeReadResponseJson(saveRes);
+          if (!saveRes.ok) throw new Error(saveData.error || 'Erro ao vincular banco no setup');
+
+          await carregarCartoesSetupConta();
+          mostrarFeedbackEl(
+            setupContaFeedback,
+            'success',
+            `${saveData.connectorName || 'Banco'} conectado. ${saveData.cartoesSincronizados || 0} cartão(ões) sincronizados.`
+          );
+        } catch (err) {
+          mostrarFeedbackEl(setupContaFeedback, 'error', err.message);
+        }
+      },
+      onError: (err) => {
+        console.error('Pluggy widget error no setup:', err);
+        mostrarFeedbackEl(setupContaFeedback, 'error', 'Erro ao conectar ao banco. Tente novamente.');
+      },
+    });
+
+    pluggyConnect.init();
+  } catch (err) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', err.message);
+  } finally {
+    btnSetupConectarPluggy.disabled = false;
+    btnSetupConectarPluggy.textContent = '🏦 Conectar banco com Pluggy';
+  }
+}
+
+function renderCartoesSetupConta() {
+  if (!setupListaCartoes) return;
+  if (!currentSetupContaCartoes.length) {
+    setupListaCartoes.innerHTML = '<p class="empty-state-inline">Nenhum cartão cadastrado ainda.</p>';
+    return;
+  }
+
+  setupListaCartoes.innerHTML = currentSetupContaCartoes.map((cartao) => `
+    <article class="cartao-item">
+      <div class="cartao-info">
+        <h3>${escapeHtml(cartao.cartaoNome || 'Cartão')}</h3>
+        <p>${escapeHtml(cartao.bancoNome || 'Banco')} • ${escapeHtml(cartao.tipoCartao || 'credito')}</p>
+      </div>
+      <button class="btn btn-outline btn-sm btn-remover-cartao-setup" data-id="${escapeHtml(cartao.id)}">Remover</button>
+    </article>
+  `).join('');
+
+  setupListaCartoes.querySelectorAll('.btn-remover-cartao-setup').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (!confirm('Remover este cartão?')) return;
+      try {
+        const res = await fetch(`${API_URL}/cartoes/${encodeURIComponent(button.dataset.id)}`, {
+          method: 'DELETE',
+          headers: authHeaders(),
+        });
+        const data = await safeReadResponseJson(res);
+        if (!res.ok) throw new Error(data.error || 'Erro ao remover cartão');
+        await carregarCartoesSetupConta();
+      } catch (err) {
+        mostrarFeedbackEl(setupContaFeedback, 'error', err.message);
+      }
+    });
+  });
+}
+
+async function carregarCartoesSetupConta() {
+  try {
+    const res = await fetch(`${API_URL}/cartoes`, { headers: authHeaders() });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar cartões');
+    currentSetupContaCartoes = await res.json();
+  } catch (err) {
+    currentSetupContaCartoes = [];
+    console.warn('Erro ao carregar cartões do setup de conta:', err.message);
+  }
+  renderCartoesSetupConta();
+}
+
+btnSetupAddCartao?.addEventListener('click', async () => {
+  const bancoNome = String(setupCartaoBanco.value || '').trim();
+  const cartaoNome = String(setupCartaoNome.value || '').trim();
+  const finalCartao = String(setupCartaoFinal.value || '').trim();
+  const tipoCartao = String(setupCartaoTipo.value || 'credito').trim();
+  const diaFechamentoFatura = parseInt(String(setupCartaoFechamento.value || ''), 10);
+  const diaVencimentoFatura = setupCartaoVencimento.value ? parseInt(String(setupCartaoVencimento.value), 10) : '';
+
+  if (!bancoNome || !cartaoNome) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', 'Informe banco e nome do cartão.');
+    return;
+  }
+  if (isNaN(diaFechamentoFatura) || diaFechamentoFatura < 1 || diaFechamentoFatura > 31) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', 'Dia de fechamento inválido.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/cartoes`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        bancoNome,
+        cartaoNome,
+        finalCartao,
+        tipoCartao,
+        diaFechamentoFatura,
+        diaVencimentoFatura,
+      }),
+    });
+    const data = await safeReadResponseJson(res);
+    if (!res.ok) throw new Error(data.error || 'Erro ao criar cartão');
+
+    setupCartaoBanco.value = '';
+    setupCartaoNome.value = '';
+    setupCartaoFinal.value = '';
+    setupCartaoFechamento.value = '';
+    setupCartaoVencimento.value = '';
+    await carregarCartoesSetupConta();
+    mostrarFeedbackEl(setupContaFeedback, 'success', 'Cartão adicionado com sucesso.');
+  } catch (err) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', err.message);
+  }
+});
+
+setupTipoRenda?.addEventListener('change', atualizarVisibilidadeRendaSetupConta);
+setupCartaoModo?.addEventListener('change', atualizarVisibilidadeModoCartaoSetup);
+btnSetupConectarPluggy?.addEventListener('click', conectarBancoPluggyNoSetup);
+
+btnSetupLogout?.addEventListener('click', async () => {
+  await fetch(`${API_URL}/auth/logout`, { method: 'POST', headers: authHeaders() }).catch(() => {});
+  currentProfile = null;
+  removeToken();
+  mostrarTelaLogin();
+});
+
+formSetupConta?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  setupContaFeedback.classList.add('hidden');
+
+  const displayName = String(setupDisplayName.value || '').trim();
+  const tipoRenda = String(setupTipoRenda.value || 'fixa').toLowerCase() === 'variavel' ? 'variavel' : 'fixa';
+  const rendaMensalBase = tipoRenda === 'fixa'
+    ? parseFloat(String(setupRendaBase.value || '0').replace(',', '.'))
+    : 0;
+  const modoCartao = String(setupCartaoModo.value || 'manual').toLowerCase();
+
+  if (!displayName) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', 'Informe o nome exibido.');
+    return;
+  }
+  if (tipoRenda === 'fixa' && (isNaN(rendaMensalBase) || rendaMensalBase < 0)) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', 'Renda mensal inválida para renda fixa.');
+    return;
+  }
+  if (currentSetupContaCartoes.length === 0) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', modoCartao === 'pluggy'
+      ? 'Nenhum cartão encontrado. Conecte um banco com Pluggy para sincronizar seus cartões.'
+      : 'Adicione ao menos um cartão manual para continuar.');
+    return;
+  }
+
+  btnSetupContaConcluir.disabled = true;
+  btnSetupContaConcluir.textContent = 'Salvando...';
+  try {
+    const res = await fetch(`${API_URL}/auth/profile`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        displayName,
+        tipoRenda,
+        rendaMensalBase,
+        setupContaConcluido: true,
+      }),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await safeReadResponseJson(res);
+    if (!res.ok) throw new Error(data.error || 'Erro ao concluir setup da conta');
+
+    currentProfile = data.profile;
+    mostrarLobby(currentUser);
+  } catch (err) {
+    mostrarFeedbackEl(setupContaFeedback, 'error', err.message);
+  } finally {
+    btnSetupContaConcluir.disabled = false;
+    btnSetupContaConcluir.textContent = 'Salvar e continuar';
+  }
+});
+
+btnControleSetupVoltar?.addEventListener('click', () => {
+  currentSetupControle = null;
+  mostrarLobby(currentUser);
+});
+
+formSetupControle?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  setupControleFeedback.classList.add('hidden');
+
+  if (!currentSetupControle?.id) {
+    mostrarFeedbackEl(setupControleFeedback, 'error', 'Controle inválido para configuração.');
+    return;
+  }
+
+  const tipoControle = String(setupTipoControle.value || 'solo').toLowerCase();
+  const cartaoIds = Array.from(setupControleCartoes.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((input) => String(input.value || '').trim())
+    .filter(Boolean);
+
+  if (cartaoIds.length === 0) {
+    mostrarFeedbackEl(setupControleFeedback, 'error', 'Selecione ao menos um cartão para este controle.');
+    return;
+  }
+
+  btnSetupControleSalvar.disabled = true;
+  btnSetupControleSalvar.textContent = 'Salvando...';
+
+  try {
+    const res = await fetch(`${API_URL}/controles/${currentSetupControle.id}/setup`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ tipoControle, cartaoIds }),
+    });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    const data = await safeReadResponseJson(res);
+    if (!res.ok) throw new Error(data.error || 'Erro ao salvar setup do controle');
+
+    await abrirControle(currentSetupControle.id, currentSetupControle.nome, currentSetupControle.ownerEmail);
+    currentSetupControle = null;
+  } catch (err) {
+    mostrarFeedbackEl(setupControleFeedback, 'error', err.message);
+  } finally {
+    btnSetupControleSalvar.disabled = false;
+    btnSetupControleSalvar.textContent = 'Salvar e abrir controle';
+  }
+});
+
 async function carregarRendaGeralControle() {
   if (!currentControleId) return;
   const res = await fetch(`${API_URL}/controles/${currentControleId}/renda-geral?mes=${mesAtual()}`, {
@@ -337,6 +704,8 @@ function voltarLobby() {
   rendaGeralAtual = null;
   currentSugestoesParcelamento = [];
   setDashboardArea('resumo');
+  profileSetupScreen.classList.add('hidden');
+  controleSetupScreen.classList.add('hidden');
   appScreen.classList.add('hidden');
   lobbyScreen.classList.remove('hidden');
   carregarControles();
@@ -508,7 +877,7 @@ btnCriarConfirmar.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) { mostrarFeedbackEl(criarFeedback, 'error', data.error || 'Erro ao criar.'); return; }
     modalCriar.classList.add('hidden');
-    carregarControles();
+    await abrirSetupControle(data);
   } catch {
     mostrarFeedbackEl(criarFeedback, 'error', 'Erro de conexão.');
   } finally {
@@ -546,7 +915,7 @@ btnParticiparConfirmar.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) { mostrarFeedbackEl(participarFeedback, 'error', data.error || 'Erro ao entrar.'); return; }
     modalParticipar.classList.add('hidden');
-    carregarControles();
+    await abrirSetupControle(data);
   } catch {
     mostrarFeedbackEl(participarFeedback, 'error', 'Erro de conexão.');
   } finally {
@@ -659,10 +1028,21 @@ async function excluirControle(controleId, nome) {
 
 // ─── Dashboard: abrir controle ────────────────────────────────────────────────
 async function abrirControle(id, nome, ownerEmail) {
+  const setupRes = await fetch(`${API_URL}/controles/${id}/setup`, { headers: authHeaders() });
+  if (setupRes.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+  if (setupRes.ok) {
+    const setupData = await setupRes.json();
+    if (!setupData.setupConcluido) {
+      await abrirSetupControle({ id, nome, ownerEmail });
+      return;
+    }
+  }
+
   currentControleId   = id;
   currentControleNome = nome;
   currentControleOwnerEmail = ownerEmail || null;
   controleNomeEl.textContent = nome;
+  controleSetupScreen.classList.add('hidden');
   lobbyScreen.classList.add('hidden');
   appScreen.classList.remove('hidden');
   setDashboardArea(currentDashboardArea || 'resumo');
@@ -688,6 +1068,53 @@ async function abrirControle(id, nome, ownerEmail) {
     console.error(err);
     mostrarFeedback('error', 'Não foi possível carregar os membros deste controle.');
   }
+}
+
+async function abrirSetupControle(controle) {
+  currentSetupControle = {
+    id: controle.id,
+    nome: controle.nome,
+    ownerEmail: controle.ownerEmail || null,
+  };
+  controleSetupNome.textContent = controle.nome || 'Controle';
+  setupControleFeedback.classList.add('hidden');
+
+  try {
+    const res = await fetch(`${API_URL}/controles/${controle.id}/setup`, { headers: authHeaders() });
+    if (res.status === 401) { removeToken(); mostrarTelaLogin(); return; }
+    if (!res.ok) throw new Error('Erro ao carregar dados do setup do controle');
+    const data = await res.json();
+
+    setupTipoControle.value = data.tipoControle || 'solo';
+    renderizarCartoesSetupControle(data.cartoesDisponiveis || [], data.cartaoIdsSelecionados || []);
+    mostrarTelaSetupControle();
+  } catch (err) {
+    alert(err.message || 'Erro ao abrir setup do controle');
+    mostrarLobby();
+  }
+}
+
+function renderizarCartoesSetupControle(cartoes, selecionados) {
+  const selectedSet = new Set((selecionados || []).map((id) => String(id || '')));
+  if (!setupControleCartoes) return;
+
+  if (!cartoes.length) {
+    setupControleCartoes.innerHTML = '<p class="empty-state-inline">Você ainda não tem cartões. Configure ao menos um cartão na etapa de conta.</p>';
+    return;
+  }
+
+  setupControleCartoes.innerHTML = cartoes.map((cartao) => {
+    const checked = selectedSet.has(String(cartao.id || '')) ? 'checked' : '';
+    const nome = escapeHtml(cartao.cartaoNome || 'Cartão');
+    const banco = escapeHtml(cartao.bancoNome || 'Banco');
+    const tipo = escapeHtml(cartao.tipoCartao || 'credito');
+    return `
+      <label class="setup-cartao-item">
+        <input type="checkbox" value="${escapeHtml(cartao.id)}" ${checked} />
+        <span>${nome} • ${banco} (${tipo})</span>
+      </label>
+    `;
+  }).join('');
 }
 
 btnLobby.addEventListener('click', voltarLobby);

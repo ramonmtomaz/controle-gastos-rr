@@ -22,6 +22,146 @@
     </div>
   </div>
 
+  <!-- ─── Setup inicial da conta ───────────────────────────────────────────── -->
+  <div id="profile-setup-screen" class="hidden">
+    <header class="navbar">
+      <div class="navbar-brand">💰 Configuração da Conta</div>
+      <div class="navbar-user">
+        <img id="setup-user-picture" src="" alt="Foto" class="user-avatar" />
+        <span id="setup-user-name"></span>
+        <button id="btn-setup-logout" class="btn btn-outline btn-sm">Sair</button>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card form-section">
+        <h2>Finalize sua conta</h2>
+        <p class="section-subtitle">Antes de continuar, configure seu nome, renda e cartões.</p>
+        <form id="form-setup-conta">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="setup-display-name">Nome exibido *</label>
+              <input type="text" id="setup-display-name" maxlength="120" required />
+            </div>
+            <div class="form-group">
+              <label for="setup-tipo-renda">Tipo de renda *</label>
+              <select id="setup-tipo-renda" required>
+                <option value="fixa">Fixa</option>
+                <option value="variavel">Variável</option>
+              </select>
+            </div>
+            <div class="form-group" id="setup-grupo-renda-base">
+              <label for="setup-renda-base">Renda mensal (R$) *</label>
+              <input type="number" id="setup-renda-base" min="0" step="0.01" required />
+            </div>
+          </div>
+
+          <div class="setup-cards-box">
+            <h3>Cartões</h3>
+            <p class="section-subtitle">Escolha como deseja configurar os cartões neste momento.</p>
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="setup-cartao-modo">Modo de configuração *</label>
+                <select id="setup-cartao-modo" required>
+                  <option value="manual">Manual agora</option>
+                  <option value="pluggy">Pluggy agora</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="setup-cartao-pluggy-box" class="hidden">
+              <p class="section-subtitle">Conecte seu banco no Pluggy para sincronizar cartões automaticamente.</p>
+              <div class="form-actions">
+                <button type="button" id="btn-setup-conectar-pluggy" class="btn btn-outline">🏦 Conectar banco com Pluggy</button>
+              </div>
+            </div>
+
+            <div id="setup-cartao-manual-box">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="setup-cartao-banco">Banco *</label>
+                  <input type="text" id="setup-cartao-banco" maxlength="100" />
+                </div>
+                <div class="form-group">
+                  <label for="setup-cartao-nome">Nome do cartão *</label>
+                  <input type="text" id="setup-cartao-nome" maxlength="100" />
+                </div>
+                <div class="form-group">
+                  <label for="setup-cartao-final">Final</label>
+                  <input type="text" id="setup-cartao-final" maxlength="4" pattern="\d{0,4}" />
+                </div>
+                <div class="form-group">
+                  <label for="setup-cartao-tipo">Tipo *</label>
+                  <select id="setup-cartao-tipo">
+                    <option value="credito">Crédito</option>
+                    <option value="debito">Débito</option>
+                    <option value="ambos">Crédito e Débito</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="setup-cartao-fechamento">Fechamento *</label>
+                  <input type="number" id="setup-cartao-fechamento" min="1" max="31" />
+                </div>
+                <div class="form-group">
+                  <label for="setup-cartao-vencimento">Vencimento</label>
+                  <input type="number" id="setup-cartao-vencimento" min="1" max="31" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="button" id="btn-setup-add-cartao" class="btn btn-outline">+ Adicionar cartão manual</button>
+              </div>
+            </div>
+
+            <div id="setup-lista-cartoes" class="cartoes-lista"></div>
+          </div>
+
+          <div class="form-actions">
+            <div id="setup-conta-feedback" class="feedback hidden"></div>
+            <button type="submit" id="btn-setup-conta-concluir" class="btn btn-primary">Salvar e continuar</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- ─── Setup de controle ───────────────────────────────────────────────── -->
+  <div id="controle-setup-screen" class="hidden">
+    <header class="navbar">
+      <div class="navbar-brand">💰 Configuração do Controle</div>
+      <div class="navbar-user">
+        <span id="controle-setup-nome"></span>
+        <button id="btn-controle-setup-voltar" class="btn btn-outline btn-sm">Voltar ao lobby</button>
+      </div>
+    </header>
+    <main class="container">
+      <section class="card form-section">
+        <h2>Defina o controle</h2>
+        <p class="section-subtitle">Escolha o tipo do controle e quais cartões você vai usar nele.</p>
+        <form id="form-setup-controle">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="setup-tipo-controle">Tipo do controle *</label>
+              <select id="setup-tipo-controle" required>
+                <option value="solo">Solo</option>
+                <option value="compartilhado">Compartilhado</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setup-cards-box">
+            <h3>Cartões habilitados neste controle *</h3>
+            <p class="section-subtitle">Selecione ao menos um cartão seu para usar neste controle.</p>
+            <div id="setup-controle-cartoes" class="setup-cartoes-checklist"></div>
+          </div>
+
+          <div class="form-actions">
+            <div id="setup-controle-feedback" class="feedback hidden"></div>
+            <button type="submit" id="btn-setup-controle-salvar" class="btn btn-primary">Salvar e abrir controle</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
   <!-- ─── Tela de lobby ─────────────────────────────────────────────────────── -->
   <div id="lobby-screen" class="hidden">
     <header class="navbar">

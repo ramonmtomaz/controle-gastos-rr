@@ -2,6 +2,37 @@ const express = require('express');
 const router  = express.Router();
 const master  = require('../services/masterSheet');
 
+function normalizeTipoLancamento(tipo) {
+  const raw = String(tipo || '').trim().toLowerCase();
+  if (raw === 'entrada') return 'Entrada';
+  if (raw === 'investimento') return 'Investimento';
+  return 'Saida';
+}
+
+function monthKey(value) {
+  const iso = String(value || '').split('T')[0];
+  return iso.length >= 7 ? iso.slice(0, 7) : '';
+}
+
+async function calcularEntradasPorMembroNoMes(controle, mes) {
+  const response = await master.getServiceSheets().spreadsheets.values.get({
+    spreadsheetId: process.env.MASTER_SPREADSHEET_ID,
+    range: `${controle.spreadsheetId}!A2:S`,
+  });
+  const rows = response.data.values || [];
+  return rows.reduce((acc, row) => {
+    const data = row[1] || '';
+    if (monthKey(data) !== mes) return acc;
+    const tipo = normalizeTipoLancamento(row[6]);
+    if (tipo !== 'Entrada') return acc;
+    const responsavel = String(row[5] || '').toLowerCase();
+    if (!responsavel) return acc;
+    const valor = parseFloat(row[2] || 0) || 0;
+    acc[responsavel] = (acc[responsavel] || 0) + valor;
+    return acc;
+  }, {});
+}
+
 function labelFromEmail(email) {
   const raw = String(email || '').trim();
   if (!raw.includes('@')) return raw;
@@ -116,10 +147,14 @@ router.get('/:id/renda-geral', async (req, res) => {
       return res.status(403).json({ error: 'Acesso negado' });
     }
 
+    const controle = await master.getControleById(id);
+    if (!controle) return res.status(404).json({ error: 'Controle não encontrado' });
+
     const membros = await master.getMembros(id);
     const emails = membros.map((m) => m.email).filter(Boolean);
     const perfis = await master.listUserProfilesByEmails(emails);
     const extras = await master.listRendasExtrasByUsers(emails, mes);
+    const entradasPorMembro = await calcularEntradasPorMembroNoMes(controle, mes);
 
     const extrasPorEmail = extras.reduce((acc, item) => {
       const email = String(item.userEmail || '').toLowerCase();
@@ -129,10 +164,14 @@ router.get('/:id/renda-geral', async (req, res) => {
 
     const membrosRenda = emails.map((email) => {
       const perfil = perfis.find((p) => String(p.email || '').toLowerCase() === String(email || '').toLowerCase());
-      const base = parseFloat(perfil?.rendaMensalBase || 0) || 0;
+      const tipoRenda = String(perfil?.tipoRenda || 'fixa').toLowerCase();
+      const baseFixa = parseFloat(perfil?.rendaMensalBase || 0) || 0;
+      const baseVariavel = entradasPorMembro[String(email || '').toLowerCase()] || 0;
+      const base = tipoRenda === 'variavel' ? baseVariavel : baseFixa;
       const extra = extrasPorEmail[String(email || '').toLowerCase()] || 0;
       return {
         email,
+        tipoRenda,
         rendaMensalBase: base.toFixed(2),
         rendaExtraMes: extra.toFixed(2),
         rendaTotalMes: (base + extra).toFixed(2),
@@ -157,6 +196,80 @@ router.get('/:id/renda-geral', async (req, res) => {
   }
 });
 
+// ─── GET /controles/:id/setup — dados de configuração do membro no controle ─
+router.get('/:id/setup', async (req, res) => {
+  const { id } = req.params;
+  try {
+    if (!(await master.isMembro(id, req.user.email))) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const controle = await master.getControleById(id);
+    if (!controle) return res.status(404).json({ error: 'Controle não encontrado' });
+
+    const setup = await master.getMembroControleSetup(id, req.user.email);
+    const cartoesUsuario = await master.listCartoes(req.user.email);
+    const selectedIds = setup?.cartoesHabilitados || [];
+
+    res.json({
+      controleId: id,
+      tipoControle: controle.tipoControle || '',
+      setupConcluido: Boolean(setup?.setupControleConcluido),
+      cartaoIdsSelecionados: selectedIds,
+      cartoesDisponiveis: cartoesUsuario,
+    });
+  } catch (err) {
+    console.error('Erro ao carregar setup do controle:', err);
+    res.status(500).json({ error: 'Erro ao carregar setup do controle' });
+  }
+});
+
+// ─── PUT /controles/:id/setup — salva configuração do membro no controle ────
+router.put('/:id/setup', async (req, res) => {
+  const { id } = req.params;
+  const { tipoControle, cartaoIds } = req.body || {};
+
+  if (!['solo', 'compartilhado'].includes(String(tipoControle || '').toLowerCase())) {
+    return res.status(400).json({ error: 'tipoControle inválido. Use solo ou compartilhado' });
+  }
+
+  if (!Array.isArray(cartaoIds) || cartaoIds.length === 0) {
+    return res.status(400).json({ error: 'Selecione ao menos um cartão para este controle' });
+  }
+
+  try {
+    if (!(await master.isMembro(id, req.user.email))) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const cartoesUsuario = await master.listCartoes(req.user.email);
+    const validIds = new Set(cartoesUsuario.map((cartao) => cartao.id));
+    const selecionados = Array.from(new Set(
+      cartaoIds.map((value) => String(value || '').trim()).filter(Boolean)
+    ));
+
+    if (selecionados.some((cartaoId) => !validIds.has(cartaoId))) {
+      return res.status(400).json({ error: 'Há cartões inválidos na seleção' });
+    }
+
+    await master.updateControleTipo(id, String(tipoControle).toLowerCase());
+    const setupAtualizado = await master.updateMembroControleSetup(id, req.user.email, {
+      setupControleConcluido: true,
+      cartoesHabilitados: selecionados,
+    });
+
+    res.json({
+      controleId: id,
+      tipoControle: String(tipoControle).toLowerCase(),
+      setupConcluido: setupAtualizado.setupControleConcluido,
+      cartaoIdsSelecionados: setupAtualizado.cartoesHabilitados,
+    });
+  } catch (err) {
+    console.error('Erro ao salvar setup do controle:', err);
+    res.status(500).json({ error: 'Erro ao salvar setup do controle' });
+  }
+});
+
 // ─── GET /controles/:id/cartoes — cartões de todos os membros ─────────────
 router.get('/:id/cartoes', async (req, res) => {
   const { id } = req.params;
@@ -168,8 +281,13 @@ router.get('/:id/cartoes', async (req, res) => {
     const membros = await master.getMembros(id);
     const cartoesPorMembro = await Promise.all(
       membros.map(async (membro) => {
+        if (!membro.setupControleConcluido) return [];
         const cartoes = await master.listCartoes(membro.email);
-        return cartoes.map((cartao) => ({
+        const selecionados = new Set((membro.cartoesHabilitados || []).map((item) => String(item || '').trim()));
+        const filtrados = selecionados.size > 0
+          ? cartoes.filter((cartao) => selecionados.has(String(cartao.id || '').trim()))
+          : cartoes;
+        return filtrados.map((cartao) => ({
           ...cartao,
           ownerEmail: membro.email,
           ownerRole: membro.role,
