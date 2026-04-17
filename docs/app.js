@@ -192,6 +192,16 @@ const btnPluggyConectar = document.getElementById('btn-pluggy-conectar');
 const btnPluggyCancelar  = document.getElementById('btn-pluggy-cancelar');
 const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
 
+function mostrarElemento(el) {
+  if (!el) return;
+  el.classList.remove('hidden');
+}
+
+function esconderElemento(el) {
+  if (!el) return;
+  el.classList.add('hidden');
+}
+
 // ─── Inicialização ────────────────────────────────────────────────────────────
 (async function init() {
   // Captura token do URL fragment após OAuth callback (#token=...)
@@ -214,7 +224,9 @@ const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
     history.replaceState({}, '', window.location.pathname);
   }
 
-  btnLogin.href = `${API_URL}/auth/google`;
+  if (btnLogin) {
+    btnLogin.href = `${API_URL}/auth/google`;
+  }
 
   if (!getToken()) { mostrarTelaLogin(); return; }
 
@@ -244,17 +256,19 @@ const btnPluggyConfirmar = document.getElementById('btn-pluggy-confirmar');
 
 // ─── Controle de telas ────────────────────────────────────────────────────────
 function mostrarTelaLogin() {
-  loginScreen.classList.remove('hidden');
-  profileSetupScreen.classList.add('hidden');
-  controleSetupScreen.classList.add('hidden');
-  lobbyScreen.classList.add('hidden');
-  appScreen.classList.add('hidden');
+  mostrarElemento(loginScreen);
+  esconderElemento(profileSetupScreen);
+  esconderElemento(controleSetupScreen);
+  esconderElemento(lobbyScreen);
+  esconderElemento(appScreen);
 }
 
 function mostrarErroLogin(msg) {
   const el = document.getElementById('login-error');
-  el.textContent = msg;
-  el.classList.remove('hidden');
+  if (el) {
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
   mostrarTelaLogin();
 }
 
@@ -266,11 +280,11 @@ function mostrarLobby(user) {
       picture: user.picture,
     });
   }
-  loginScreen.classList.add('hidden');
-  profileSetupScreen.classList.add('hidden');
-  controleSetupScreen.classList.add('hidden');
-  appScreen.classList.add('hidden');
-  lobbyScreen.classList.remove('hidden');
+  esconderElemento(loginScreen);
+  esconderElemento(profileSetupScreen);
+  esconderElemento(controleSetupScreen);
+  esconderElemento(appScreen);
+  mostrarElemento(lobbyScreen);
   carregarControles();
 }
 
@@ -284,11 +298,11 @@ function mostrarTelaSetupConta(user) {
     currentUser = user;
   }
 
-  loginScreen.classList.add('hidden');
-  lobbyScreen.classList.add('hidden');
-  appScreen.classList.add('hidden');
-  controleSetupScreen.classList.add('hidden');
-  profileSetupScreen.classList.remove('hidden');
+  esconderElemento(loginScreen);
+  esconderElemento(lobbyScreen);
+  esconderElemento(appScreen);
+  esconderElemento(controleSetupScreen);
+  mostrarElemento(profileSetupScreen);
 
   const nome = currentProfile?.displayName || currentUser?.name || '';
   const foto = currentProfile?.pictureUrl || currentUser?.picture || '';
@@ -308,11 +322,11 @@ function mostrarTelaSetupConta(user) {
 }
 
 function mostrarTelaSetupControle() {
-  loginScreen.classList.add('hidden');
-  profileSetupScreen.classList.add('hidden');
-  lobbyScreen.classList.add('hidden');
-  appScreen.classList.add('hidden');
-  controleSetupScreen.classList.remove('hidden');
+  esconderElemento(loginScreen);
+  esconderElemento(profileSetupScreen);
+  esconderElemento(lobbyScreen);
+  esconderElemento(appScreen);
+  mostrarElemento(controleSetupScreen);
 }
 
 function updateDisplayedUserInfo({ name, picture }) {
